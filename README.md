@@ -1,5 +1,35 @@
 # CS 4984/5984 Team 13 
 
+- [CS 4984/5984 Team 13](#cs-49845984-team-13)
+- [Workflow](#workflow)
+- [What We're Doing](#what-were-doing)
+  - [Unit 1](#unit-1)
+- [Useful Info](#useful-info)
+  - [Data](#data)
+  - [Accounts](#accounts)
+    - [DLRL Hadoop Cluster](#dlrl-hadoop-cluster)
+    - [Huckleberry](#huckleberry)
+    - [Cascades](#cascades)
+  - [Tools](#tools)
+    - [Hadoop](#hadoop)
+
+# Workflow
+
+- We need to decide how we're going to divvy up the work.
+- Personally, I'm thinking we each try the units on our own (in separate git branches), and then combine what works best for our 'final' work.
+  - Mostly this is because most units are 1-file scripts, which makes it hard for multiple people to collaborate on the same script.
+
+# What We're Doing
+
+## Unit 1
+
+- For unit one, we will be producing a 'summary' of our data by picking the most used words in our dataset
+- This will require some pre-processing:
+  - The data in the JSON file (`/sentences/part-0000-....-c000.json`) is not fully cleaned. There should still be some HTML artifacts that could be gotten rid of.
+  - We will want to remove stop words and punctuation.
+  - We may want to use the roots of words instead of the full words
+- The `nltk` module has the `word_tokenize` function and the `FreqDist` class that should do a majority of the counting work for us. It also has a database of stop words somewhere. 
+
 # Useful Info
 
 ## Data
@@ -12,6 +42,8 @@ Data is split into two parts: labeled and unlabeled.
 The unlabeled files are currently stored in our home directory, in `12_Shooting_Townville_2016`. We may be asked to delete this folder later, since it's taking up unnecessary space on the cluster.
 
 It is also stored in `/home/public/cs4984_cs5984_f18/unlabeled/data/12_Shooting_Townville_2016/`
+
+The processed unlabeled data (the text data + timestamps and whatnot) from the WARC files is now stored in the `sentences` folder, in `JSON` format.
 
 The labeled data is the same for all teams, stored in `/home/public/cs4984_cs5984_f18/labeled/`
 
