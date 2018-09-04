@@ -10,6 +10,7 @@
     - [DLRL Hadoop Cluster](#dlrl-hadoop-cluster)
     - [Huckleberry](#huckleberry)
     - [Cascades](#cascades)
+  - [Easy Log-In](#easy-log-in)
   - [Tools](#tools)
     - [Hadoop](#hadoop)
 
@@ -67,6 +68,31 @@ Logins:
 ### Cascades
 
 - Need to request a login for this cluster
+
+## Easy Log-In
+
+Typing that long username + password is a pain. There's an easier way to log in to remote systems.
+
+- Look in `~/.ssh/`, check if you have the files `id_rsa` and `id_rsa.pub`
+  - If you don't, create those using the `ssh-keygen` command
+- Next, create a config file (`vim ~/.ssh/config`)
+- In the config file, enter the host information for the hosts you want to ssh into. It should look like this:
+    ```
+    Host somehost
+        HostName 1.1.1.1
+        Port 22
+        User someuser
+
+    Host dlib
+        HostName hadoop.dlib.vt.edu
+        Port 2222
+        User cs4984cs5984f18_team12
+    ```
+  - The `Host` can be any name you want, you just have to remember it, so make it descriptive
+- Now, you can ssh into any of the hosts in the config file by typing `ssh [name of host]` (e.g. `ssh dlib`)
+  - But, you still need to enter your password every time.
+- Use `ssh-copy-id [name of host]` to copy your ssh key to the host's trusted keys list
+- Now, you can ssh into the hsot without typing in your username, port number, or password!
 
 ## Tools
 
