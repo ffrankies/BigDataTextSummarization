@@ -4,6 +4,7 @@
 - [Workflow](#workflow)
 - [What We're Doing](#what-were-doing)
   - [Unit 1](#unit-1)
+  - [Unit 2](#unit-2)
 - [Useful Info](#useful-info)
   - [Data](#data)
   - [Accounts](#accounts)
@@ -29,7 +30,25 @@
   - The data in the JSON file (`/sentences/part-0000-....-c000.json`) is not fully cleaned. There should still be some HTML artifacts that could be gotten rid of.
   - We will want to remove stop words and punctuation.
   - We may want to use the roots of words instead of the full words
-- The `nltk` module has the `word_tokenize` function and the `FreqDist` class that should do a majority of the counting work for us. It also has a database of stop words somewhere. 
+- The `nltk` module has the `word_tokenize` function and the `FreqDist` class that should do a majority of the counting work for us. It also has a database of stop words somewhere.
+
+---- The Above Section is Considered Complete ----
+
+- Now, we have to focus on getting 'important' words
+- One way to do that: TF_IDF (Term Frequency - Inverse Document Frequency)
+  - We'll want to run that before filtering
+  - We may also want to compare that to filtering
+  - Words with highest (tf-idf) score are the 'most important'
+- Another way (more experimental), is to look at word collocations (words used together)
+  - The basic idea is, if two words are used together, we can use them either together (police + officer)
+  - Or we can only pick one of them (police)
+
+## Unit 2
+
+- For unit two, we're building on top of unit 1
+- We're looking at using synonyms of the words to give them more meaning / context
+- For example, 'fire' has multiple meanings. If we surround it with the synonyms for the *correct* usage of the word in context, the summary will make more 'sense'
+- It can also decrease our word count by grouping similar words together
 
 # Useful Info
 
