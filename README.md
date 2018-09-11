@@ -1,6 +1,6 @@
-# CS 4984/5984 Team 13 
+# CS 4984/5984 Team 12 
 
-- [CS 4984/5984 Team 13](#cs-49845984-team-13)
+- [CS 4984/5984 Team 12](#cs-49845984-team-12)
 - [Workflow](#workflow)
 - [What We're Doing](#what-were-doing)
   - [Unit 1](#unit-1)
