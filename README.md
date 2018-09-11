@@ -23,7 +23,7 @@
 
 # What We're Doing
 
-## Unit 1
+## Unit 1 - A set of most frequent important words
 
 - For unit one, we will be producing a 'summary' of our data by picking the most used words in our dataset
 - This will require some pre-processing:
@@ -42,13 +42,31 @@
 - Another way (more experimental), is to look at word collocations (words used together)
   - The basic idea is, if two words are used together, we can use them either together (police + officer)
   - Or we can only pick one of them (police)
+- According to [this dude](https://bdewilde.github.io/blog/2014/09/23/intro-to-automatic-keyphrase-extraction/), another way is using graph theory, clustering or some machine learning black magic.
+- - Most time intensive, but most likely to give good results
 
-## Unit 2
+## Unit 2 - A set of WordNet synsets that cover the words
 
 - For unit two, we're building on top of unit 1
 - We're looking at using synonyms of the words to give them more meaning / context
 - For example, 'fire' has multiple meanings. If we surround it with the synonyms for the *correct* usage of the word in context, the summary will make more 'sense'
 - It can also decrease our word count by grouping similar words together
+
+## Unit 3 - A set of words constrained by POS, e.g., nouns and/or verbs
+
+## Unit 4 - A set of words/word stems that are discriminating features (that also are helpful in a classifier for the relevant webpages)
+
+## Unit 5 - A set of frequent & important named entities
+
+## Unit 6 - A set of important topics, e.g., identified using LDA
+
+## Unit 7 - An extractive summary, as a set of important sentences, e.g., identified by clustering
+
+## Unit 8 - A set of values for each slot matching collection semantics
+
+## Unit 9 - A readable summary explaining the slots & values
+
+## Unit 10 - A readable abstractive summary, e.g., from deep learning
 
 # Useful Info
 
