@@ -1,16 +1,14 @@
 import argparse
 import json
 import string
+import constants
 
 from nltk.stem import WordNetLemmatizer
 from nltk import FreqDist
 from nltk import word_tokenize
 from nltk.corpus import stopwords
 from nltk.stem import SnowballStemmer
-
-TEXT = 'Sentences_t'
-NUM_ARGS = 1
-
+from nltk.corpus import wordnet
 
 def parse_arguments():
     """Parses command-line arguments.
@@ -18,7 +16,8 @@ def parse_arguments():
     - args (argparse.Namespace): The parsed arguments
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument('-f', '--file', type=str, help='The path to the JSON file containing processed text')
+    parser.add_argument('-f', '--file', type=str, help='The path to the JSON file containing processed text.')
+    parser.add_argument('-n', '--number', type=int, help='The numbers of words that this program will output.')
     return parser.parse_args()
 # End of parse_arguments()
 
@@ -33,7 +32,7 @@ def load_records(file):
     with open(file, 'r') as json_file:
         records = json_file.readlines()
     records = [json.loads(record) for record in records]
-    records = list(filter(lambda record: record[TEXT] != '', records))
+    records = list(filter(lambda record: record[constants.TEXT] != '', records))
     return records
 # End of load_records()
 
@@ -45,11 +44,12 @@ def preprocess_freq(jsonarr):
     :return: a list of important words
     """
     # remove entries with empty sentences
-    jsonarr = filter(lambda data: data[TEXT], jsonarr)
+    jsonarr = filter(lambda data: data[constants.TEXT], jsonarr)
     # change the array to just be a list of all the sentences and make them all lowercase
-    sentences = map(lambda data: data[TEXT].lower(), jsonarr)
+    sentences = map(lambda data: data[constants.TEXT].lower(), jsonarr)
     # punctuation and stopwords to remove
-    stoplist = stopwords.words('english') + list(string.punctuation)
+    stoplist = stopwords.words('english') + list(string.punctuation) \
+        + constants.CONTRACTIONS + constants.MYSQL_STOPWORDS
 
     lemmatizer = WordNetLemmatizer()
     stemmer = SnowballStemmer('english')
@@ -74,11 +74,25 @@ def preprocess_freq(jsonarr):
 def get_freq(wordlist, count=10):
     freqDist = FreqDist(wordlist)
     return freqDist.most_common(count)
-#end of get_freq
+# End of get_freq
 
 
 if __name__ == "__main__":
-    jsonFilePath = vars(parse_arguments())['file']
+    args = parse_arguments()
+    jsonFilePath = args.file
+    num = args.number
+
     jsonArr = load_records(jsonFilePath)
     processed = preprocess_freq(jsonArr)
-    print(get_freq(processed, 50))
+    freq_words = get_freq(processed, num)
+    no_freq_words = list(map(lambda tup: tup[0], freq_words))
+
+    syns = {}
+    for word in no_freq_words:
+        syns.update({word: wordnet.synsets(word)})
+
+    print(freq_words, '\n')
+
+    for s in syns:
+        print('%10s: ' % s, syns[s])
+
