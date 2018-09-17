@@ -82,7 +82,7 @@ def parse_arguments():
 # End of parse_arguments()
 
 
-def load_records(file):
+def load_records(file, preview_records = False):
     """Loads the records from the JSON file. Also filters out empty records.
 
     Params:
@@ -95,8 +95,9 @@ def load_records(file):
         records = json_file.readlines()
     records = [json.loads(record) for record in records]
     records = list(filter(lambda record: record[constants.TEXT] != '', records))
-    print("=====Random Sample of Records=====")
-    pprint.pprint(random.choices(records, k=10))
+    if preview_records:
+        print("=====Random Sample of Records=====")
+        pprint.pprint(random.choices(records, k=10))
     return records
 # End of load_records()
 
@@ -240,7 +241,7 @@ def extract_collocations(records, num_collocations, collocation_window, compare_
 
 if __name__ == "__main__":
     args = parse_arguments()
-    records = load_records(args.file)
+    records = load_records(args.file, False)
     tokenized_records = tokenize_records(records)
     extract_frequent_words(tokenized_records, args.num_words)
     extract_collocations(tokenized_records, args.num_collocations, args.collocation_window, False)
