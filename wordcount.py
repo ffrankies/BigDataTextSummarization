@@ -196,7 +196,7 @@ def extract_frequent_words(records, num_words):
 # End of extract_frequent_words()
 
 
-def extract_collocations(records, num_collocations, collocation_window):
+def extract_collocations(records, num_collocations, collocation_window, compare_collocations = False):
     """Extracts the most common collocations present in the records.
 
     Params:
@@ -213,26 +213,27 @@ def extract_collocations(records, num_collocations, collocation_window):
     best_collocations = bigram_finder.nbest(bigram_measures.raw_freq, num_collocations)
     print("=====The {:d} Most Frequent Collocations=====".format(num_collocations))
     pprint.pprint(best_collocations)
-    print("=====The {:d} Best Collocations (Pointwise Mutual Information)=====".format(num_collocations))
-    pprint.pprint(bigram_finder.nbest(bigram_measures.pmi, num_collocations))
-    print("=====The {:d} Best Collocations (Student's t test)=====".format(num_collocations))
-    pprint.pprint(bigram_finder.nbest(bigram_measures.student_t, num_collocations))
-    print("=====The {:d} Best Collocations (Chi-square test)=====".format(num_collocations))
-    pprint.pprint(bigram_finder.nbest(bigram_measures.chi_sq, num_collocations))
-    print("=====The {:d} Best Collocations (Mutual Information)=====".format(num_collocations))
-    pprint.pprint(bigram_finder.nbest(bigram_measures.mi_like, num_collocations))
-    print("=====The {:d} Best Collocations (Likelihood Ratios)=====".format(num_collocations))
-    pprint.pprint(bigram_finder.nbest(bigram_measures.likelihood_ratio, num_collocations))
-    print("=====The {:d} Best Collocations (Poisson Stirling)=====".format(num_collocations))
-    pprint.pprint(bigram_finder.nbest(bigram_measures.poisson_stirling, num_collocations))
-    print("=====The {:d} Best Collocations (Jaccard Index)=====".format(num_collocations))
-    pprint.pprint(bigram_finder.nbest(bigram_measures.jaccard, num_collocations))
-    print("=====The {:d} Best Collocations (Phi-square test)=====".format(num_collocations))
-    pprint.pprint(bigram_finder.nbest(bigram_measures.phi_sq, num_collocations))
-    print("=====The {:d} Best Collocations (Fisher's Exact Test)=====".format(num_collocations))
-    pprint.pprint(bigram_finder.nbest(bigram_measures.fisher, num_collocations))
-    print("=====The {:d} Best Collocations (Dice's Coefficient)=====".format(num_collocations))
-    pprint.pprint(bigram_finder.nbest(bigram_measures.dice, num_collocations))
+    if compare_collocations:
+        print("=====The {:d} Best Collocations (Pointwise Mutual Information)=====".format(num_collocations))
+        pprint.pprint(bigram_finder.nbest(bigram_measures.pmi, num_collocations))
+        print("=====The {:d} Best Collocations (Student's t test)=====".format(num_collocations))
+        pprint.pprint(bigram_finder.nbest(bigram_measures.student_t, num_collocations))
+        print("=====The {:d} Best Collocations (Chi-square test)=====".format(num_collocations))
+        pprint.pprint(bigram_finder.nbest(bigram_measures.chi_sq, num_collocations))
+        print("=====The {:d} Best Collocations (Mutual Information)=====".format(num_collocations))
+        pprint.pprint(bigram_finder.nbest(bigram_measures.mi_like, num_collocations))
+        print("=====The {:d} Best Collocations (Likelihood Ratios)=====".format(num_collocations))
+        pprint.pprint(bigram_finder.nbest(bigram_measures.likelihood_ratio, num_collocations))
+        print("=====The {:d} Best Collocations (Poisson Stirling)=====".format(num_collocations))
+        pprint.pprint(bigram_finder.nbest(bigram_measures.poisson_stirling, num_collocations))
+        print("=====The {:d} Best Collocations (Jaccard Index)=====".format(num_collocations))
+        pprint.pprint(bigram_finder.nbest(bigram_measures.jaccard, num_collocations))
+        print("=====The {:d} Best Collocations (Phi-square test)=====".format(num_collocations))
+        pprint.pprint(bigram_finder.nbest(bigram_measures.phi_sq, num_collocations))
+        print("=====The {:d} Best Collocations (Fisher's Exact Test)=====".format(num_collocations))
+        pprint.pprint(bigram_finder.nbest(bigram_measures.fisher, num_collocations))
+        print("=====The {:d} Best Collocations (Dice's Coefficient)=====".format(num_collocations))
+        pprint.pprint(bigram_finder.nbest(bigram_measures.dice, num_collocations))
     return best_collocations
 # End of extract_collocations()
 
@@ -242,4 +243,4 @@ if __name__ == "__main__":
     records = load_records(args.file)
     tokenized_records = tokenize_records(records)
     extract_frequent_words(tokenized_records, args.num_words)
-    extract_collocations(tokenized_records, args.num_collocations, args.collocation_window)
+    extract_collocations(tokenized_records, args.num_collocations, args.collocation_window, False)
