@@ -113,7 +113,10 @@ def tokenize_records(records):
     """
     contents = map(lambda record: record[constants.TEXT], records)
     tokenized_records = [word_tokenize(record.lower()) for record in contents]
-    lemmatized_words = lemmatize_words(tokenized_records)
+    lemmatized_records = lemmatize_words(tokenized_records)
+    lemmatized_words = list()
+    for lemmatized_record in lemmatized_records:
+        lemmatized_words.extend(lemmatized_record)
     return lemmatized_words
 # End of tokenize_records()
 
@@ -145,7 +148,7 @@ def lemmatize_words(records):
         except Exception as err:
             print(record)
             raise err
-        lemmatized_records.extend(lemmatized_record)
+        lemmatized_records.append(lemmatized_record)
     print('Total number of words after filtering: {:d}'.format(len(lemmatized_records)))
     return lemmatized_records
 # End of lemmatize_words()
