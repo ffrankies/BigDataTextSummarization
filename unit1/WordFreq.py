@@ -7,7 +7,6 @@ from nltk.stem import WordNetLemmatizer
 from nltk import FreqDist
 from nltk import word_tokenize
 from nltk.corpus import stopwords
-from nltk.stem import SnowballStemmer
 from nltk.corpus import wordnet
 
 
@@ -20,8 +19,6 @@ def parse_arguments():
     parser.add_argument('-f', '--file', type=str, help='The path to the JSON file containing processed text.')
     parser.add_argument('-n', '--number', type=int, help='The numbers of words that this program will output.')
     return parser.parse_args()
-
-
 # End of parse_arguments()
 
 
@@ -37,8 +34,6 @@ def load_records(file):
     records = [json.loads(record) for record in records]
     records = list(filter(lambda record: record[constants.TEXT] != '', records))
     return records
-
-
 # End of load_records()
 
 
@@ -57,7 +52,6 @@ def preprocess_freq(jsonarr):
                + constants.CONTRACTIONS + constants.MYSQL_STOPWORDS
 
     lemmatizer = WordNetLemmatizer()
-    stemmer = SnowballStemmer('english')
 
     cleaned = []
     for sentence in sentences:
@@ -65,27 +59,22 @@ def preprocess_freq(jsonarr):
         words = word_tokenize(sentence)
         # filter list of words to remove stop words and punctuation
         filtered = list(filter(lambda word: word not in stoplist, words))
-        # get stem of all words
-        # TODO stemmed = map(lambda word: stemmer.stem(word), filtered)
-        # lemmatize all words
-        # TODO lemmatized = map(lambda word: lemmatizer.lemmatize(word), stemmed)
 
-        # TODO remove
+        # lemmatize all words
         lemmatized = map(lambda word: lemmatizer.lemmatize(word), filtered)
         cleaned.extend(lemmatized)
 
     return cleaned
-
-
 # End of preprocess_freq
 
-def generate_syn_set(freq_list):
+
+def generate_syn_set(freq_list, rng=10):
     freq_hash = set(freq_list)
     general_synonyms = {}
     relevant_synonyms = {}
 
     # Get the synonyms and their hypernyms for each of the top 10 most frequent works and store the word mapped to them
-    for i in range(10):
+    for i in range(rng):
         curr_general_synonyms = wordnet.synsets(freq_list[i])
         extended_synonyms = []
         for curr_syn in curr_general_synonyms:
@@ -93,12 +82,11 @@ def generate_syn_set(freq_list):
             extended_synonyms.append(curr_syn)
 
         extended_synonyms = list(map(lambda x: x.name().split('.')[0], extended_synonyms))
-        print(freq_list[i], extended_synonyms)
+        # TODO remove print(freq_list[i], extended_synonyms)
         general_synonyms.update({freq_list[i]: extended_synonyms})
 
-
     # Store 10 most frequent works in relevant_synonyms mapped to an empty array
-    for j in range(10):
+    for j in range(rng):
         relevant_synonyms.update({freq_list[j]: []})
 
     for word in general_synonyms:
@@ -108,15 +96,38 @@ def generate_syn_set(freq_list):
                 relevant_synonyms[word].append(syn)
 
     return relevant_synonyms
-
-
 # End of generate_syn_set
 
-def get_freq(wordlist, count=10):
-    freqDist = FreqDist(wordlist)
-    return freqDist.most_common(count)
+
+def path_similarity_set(freq_list, rng=10):
+    similarity_dict = {}
+    for i in range(rng):
+        similar_arr = []
+        for word in freq_list:
+            freq_word = freq_list[i]
+            if word != freq_word and is_similar(freq_word, word):
+                similar_arr.append(word)
+        similarity_dict[freq_word] = similar_arr
+    return similarity_dict
+# End of path_similarity_set
 
 
+def is_similar(word1, word2):
+    set1 = wordnet.synsets(word1)
+    set2 = wordnet.synsets(word2)
+
+    for word1 in set1:
+        for word2 in set2:
+            score = wordnet.path_similarity(word1, word2)
+            if score and score > constants.SIMILARITY_THRESHOLD:
+                return True
+    return False
+# End of is_similar
+
+
+def get_freq(word_list, count=10):
+    freq_dist = FreqDist(word_list)
+    return freq_dist.most_common(count)
 # End of get_freq
 
 
@@ -134,6 +145,13 @@ if __name__ == "__main__":
     # TODO print(freq_words, '\n')
 
     syns = generate_syn_set(no_count_freq_words)
+    syns2 = path_similarity_set(no_count_freq_words)
 
     for s in syns:
         print('%10s: ' % s, syns[s])
+
+    print()
+
+    for s in syns2:
+        print('%10s: ' % s, syns2[s])
+# End main

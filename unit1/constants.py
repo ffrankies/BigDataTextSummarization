@@ -8,3 +8,6 @@ CONTRACTIONS = ['\'s', '\'re', 'n\'t', '\'t', '\'d', '\'ve', '\'ll', '\'m\'a', '
 URL = 'URL_s'
 TIME = 'Timestamp_s'
 TEXT = 'Sentences_t'
+
+# Numerical constants
+SIMILARITY_THRESHOLD = .5
