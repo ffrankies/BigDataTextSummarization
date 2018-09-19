@@ -68,14 +68,16 @@ def preprocess_freq(jsonarr):
 # End of preprocess_freq
 
 
-def generate_syn_set(freq_list, rng=10):
+def generate_syn_set(freq_list_complete, rng=10):
+    freq_list = list(map(lambda tup: tup[0], freq_list_complete))
+
     freq_hash = set(freq_list)
     general_synonyms = {}
     relevant_synonyms = {}
 
     # Get the synonyms and their hypernyms for each of the top 10 most frequent works and store the word mapped to them
-    for i in range(rng):
-        curr_general_synonyms = wordnet.synsets(freq_list[i])
+    for curr_set in freq_list:
+        curr_general_synonyms = wordnet.synsets(curr_set)
         extended_synonyms = []
         for curr_syn in curr_general_synonyms:
             extended_synonyms.extend(curr_syn.hypernyms())
@@ -83,17 +85,21 @@ def generate_syn_set(freq_list, rng=10):
 
         extended_synonyms = list(map(lambda x: x.name().split('.')[0], extended_synonyms))
         # TODO remove print(freq_list[i], extended_synonyms)
-        general_synonyms.update({freq_list[i]: extended_synonyms})
+        general_synonyms.update({curr_set: [extended_synonyms]})
 
-    # Store 10 most frequent works in relevant_synonyms mapped to an empty array
-    for j in range(rng):
-        relevant_synonyms.update({freq_list[j]: []})
+    # Store 10 most frequent work in relevant_synonyms mapped to an empty array
+    for curr_syn in general_synonyms:
+        relevant_synonyms[curr_syn] = [0]
 
     for word in general_synonyms:
         curr_syns = general_synonyms[word]
         for syn in curr_syns:
-            if syn != word and syn in freq_hash and syn not in relevant_synonyms[word]:
+            if syn != word and \
+                    syn in freq_hash and \
+                    syn not in relevant_synonyms[word]:
                 relevant_synonyms[word].append(syn)
+                word_count = list(filter(lambda x: x[0] == syn, freq_list_complete))[0][1]
+                relevant_synonyms[word][0] = relevant_synonyms[word][0] + word_count
 
     return relevant_synonyms
 # End of generate_syn_set
@@ -144,14 +150,14 @@ if __name__ == "__main__":
 
     # TODO print(freq_words, '\n')
 
-    syns = generate_syn_set(no_count_freq_words)
-    syns2 = path_similarity_set(no_count_freq_words)
+    syns = generate_syn_set(freq_words)
+    # syns2 = path_similarity_set(no_count_freq_words)
 
     for s in syns:
         print('%10s: ' % s, syns[s])
 
     print()
 
-    for s in syns2:
-        print('%10s: ' % s, syns2[s])
+    # for s in syns2:
+    #     print('%10s: ' % s, syns2[s])
 # End main
