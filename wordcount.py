@@ -13,6 +13,7 @@ from nltk.collocations import BigramCollocationFinder
 from nltk.corpus import wordnet
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
+from nltk.corpus import words as nltk_words
 from nltk.stem import WordNetLemmatizer
 from nltk.probability import FreqDist
 
@@ -82,7 +83,7 @@ def parse_arguments():
 # End of parse_arguments()
 
 
-def load_records(file, preview_records = False):
+def load_records(file, preview_records=False):
     """Loads the records from the JSON file. Also filters out empty records.
 
     Params:
@@ -164,11 +165,20 @@ def filter_stopwords(tagged_records):
     Returns:
     - filtered_records (list<list<tuple<str, str>>>): The records, with unimportant words filtered out
     """
+    print('Filtering stopwords')
     stop_words = list(stopwords.words('english'))
     stop_words.extend(string.punctuation)
     stop_words.extend(constants.CONTRACTIONS)
     stop_words.extend(constants.MYSQL_STOPWORDS)
-    filtered_records = [list(filter(lambda word: word[0] not in stop_words, record)) for record in tagged_records]
+    dictionary_words = set(nltk_words.words())
+
+    def not_dictionary_word(word): 
+        return word[0] not in dictionary_words and word[1] not in ['NNP', 'NNPS']
+
+    filtered_records = [filter(lambda word: word[0] not in stop_words, record) for record in tagged_records]
+    filtered_records = [filter(lambda word: not_dictionary_word, record) for record in filtered_records]
+    filtered_records = [filter(lambda word: not word[0].replace('.', '', 1).isdigit(), record)
+                        for record in filtered_records]  # see https://stackoverflow.com/a/23639915/5760608
     filtered_records = [list(filter(lambda word: word[1] in POS_TRANSLATOR.keys(), record))
                         for record in filtered_records]
     return filtered_records
