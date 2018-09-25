@@ -10,4 +10,3 @@ TIME = 'Timestamp_s'
 TEXT = 'Sentences_t'
 
 # Numerical constants
-SIMILARITY_THRESHOLD = .5
