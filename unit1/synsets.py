@@ -46,10 +46,10 @@ def generate_related_set(freq_words):
         extended_synonyms = []
         for curr_syn in curr_general_synonyms:
             extended_synonyms.extend(curr_syn.hypernyms())
-            extended_synonyms.append(curr_syn)
 
         # Get just the english word from the synset string
         extended_syns = list(map(lambda x: x.name().split('.')[0], extended_synonyms))
+        extended_syns.append(curr_set)
         general_syns.update({curr_set: extended_syns})
     return general_syns
 # End of generate_related_set
@@ -62,5 +62,5 @@ def print_syn_set(syn_set):
     """
     for w in sorted(syn_set, key=syn_set.get, reverse=True):
         if syn_set[w][0] != 0:
-            print(w, syn_set[w])
+            print("%15s"%w, syn_set[w])
 # End of print_syn_set
