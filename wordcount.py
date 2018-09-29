@@ -185,7 +185,7 @@ def filter_stopwords(tagged_records):
 # End of filter_stopwords()
 
 
-def extract_frequent_words(records, num_words):
+def extract_frequent_words(records, num_words, no_counts=False):
     """Stems the words in the given records, and then counts the words using NLTK FreqDist.
 
     Stemming is done using the English Snowball stemmer as per the recommendation from 
@@ -197,13 +197,15 @@ def extract_frequent_words(records, num_words):
     Params:
     - records (list<str>): The tokenized records from the JSON file
     - num_words (int): The number of words to extract
+    - no_counts (bool): If True, frequent words will not include the word counts
 
     Returns:
-    - frequent_words (list<str>): The list of most frequent words
+    - frequent_words (list<str> or list<tuple<str, int>>): The list of most frequent words
     """
     word_counts = FreqDist(records)
     frequent_words = word_counts.most_common(num_words)
-    frequent_words = [word[0] for word in frequent_words]
+    if no_counts:
+        frequent_words = [word[0] for word in frequent_words]
     print("=====The {:d} Most Frequent Words=====".format(num_words))
     print(frequent_words)
     return frequent_words
@@ -256,5 +258,5 @@ if __name__ == "__main__":
     args = parse_arguments()
     records = load_records(args.file, False)
     tokenized_records = tokenize_records(records)
-    extract_frequent_words(tokenized_records, args.num_words)
+    extract_frequent_words(tokenized_records, args.num_words, True)
     extract_collocations(tokenized_records, args.num_collocations, args.collocation_window, False)
