@@ -3,8 +3,16 @@
 - [CS 4984/5984 Team 12](#cs-49845984-team-12)
 - [Workflow](#workflow)
 - [What We're Doing](#what-were-doing)
-  - [Unit 1](#unit-1)
-  - [Unit 2](#unit-2)
+  - [Unit 1 - A set of most frequent important words](#unit-1---a-set-of-most-frequent-important-words)
+  - [Unit 2 - A set of WordNet synsets that cover the words](#unit-2---a-set-of-wordnet-synsets-that-cover-the-words)
+  - [Unit 3 - A set of words constrained by POS, e.g., nouns and/or verbs](#unit-3---a-set-of-words-constrained-by-pos-eg-nouns-andor-verbs)
+  - [Unit 4 - A set of words/word stems that are discriminating features (that also are helpful in a classifier for the relevant webpages)](#unit-4---a-set-of-wordsword-stems-that-are-discriminating-features-that-also-are-helpful-in-a-classifier-for-the-relevant-webpages)
+  - [Unit 5 - A set of frequent & important named entities](#unit-5---a-set-of-frequent--important-named-entities)
+  - [Unit 6 - A set of important topics, e.g., identified using LDA](#unit-6---a-set-of-important-topics-eg-identified-using-lda)
+  - [Unit 7 - An extractive summary, as a set of important sentences, e.g., identified by clustering](#unit-7---an-extractive-summary-as-a-set-of-important-sentences-eg-identified-by-clustering)
+  - [Unit 8 - A set of values for each slot matching collection semantics](#unit-8---a-set-of-values-for-each-slot-matching-collection-semantics)
+  - [Unit 9 - A readable summary explaining the slots & values](#unit-9---a-readable-summary-explaining-the-slots--values)
+  - [Unit 10 - A readable abstractive summary, e.g., from deep learning](#unit-10---a-readable-abstractive-summary-eg-from-deep-learning)
 - [Useful Info](#useful-info)
   - [Data](#data)
   - [Accounts](#accounts)
@@ -31,19 +39,13 @@
   - We will want to remove stop words and punctuation.
   - We may want to use the roots of words instead of the full words
 - The `nltk` module has the `word_tokenize` function and the `FreqDist` class that should do a majority of the counting work for us. It also has a database of stop words somewhere.
-
----- The Above Section is Considered Complete ----
-
-- Now, we have to focus on getting 'important' words
 - One way to do that: TF_IDF (Term Frequency - Inverse Document Frequency)
-  - We'll want to run that before filtering
-  - We may also want to compare that to filtering
   - Words with highest (tf-idf) score are the 'most important'
 - Another way (more experimental), is to look at word collocations (words used together)
   - The basic idea is, if two words are used together, we can use them either together (police + officer)
   - Or we can only pick one of them (police)
-- According to [this dude](https://bdewilde.github.io/blog/2014/09/23/intro-to-automatic-keyphrase-extraction/), another way is using graph theory, clustering or some machine learning black magic.
-- - Most time intensive, but most likely to give good results
+- According to [this dude](https://bdewilde.github.io/blog/2014/09/23/intro-to-automatic-keyphrase-extraction/), another way is using graph theory, clustering or some machine learning black magic. [We didn't do this because it's hard]
+  - Most time intensive, but most likely to give good results
 
 ## Unit 2 - A set of WordNet synsets that cover the words
 
@@ -53,6 +55,9 @@
 - It can also decrease our word count by grouping similar words together
 
 ## Unit 3 - A set of words constrained by POS, e.g., nouns and/or verbs
+
+- We already have part of speech tagging as part of the wordcount. We just need to leverage that.
+- Will most likely want to incorporate the important words gotten from tf-idf into this
 
 ## Unit 4 - A set of words/word stems that are discriminating features (that also are helpful in a classifier for the relevant webpages)
 
