@@ -1,7 +1,9 @@
 # coding: utf-8
 from nltk.corpus import wordnet
+from nltk.probability import FreqDist
 
 import wordcount
+import tfidf
 
 
 def generate_syn_set(freq_list_complete):
@@ -72,7 +74,14 @@ def print_syn_set(syn_set):
 if __name__ == "__main__":
     args = wordcount.parse_arguments()
     records = wordcount.load_records(args.file)
-    tokenized_records = wordcount.tokenize_records(records)
-    frequent_words = wordcount.extract_frequent_words(tokenized_records, 500)
-    synset_dict = generate_syn_set(frequent_words)
+    # tokenized_records = wordcount.tokenize_records(records)
+    # frequent_words = wordcount.extract_frequent_words(tokenized_records, 500)
+    tf_idf_scores = tfidf.tf_idf(records)
+    important_words = tfidf.extract_important_words(tf_idf_scores, 500)
+    records_tokenized = wordcount.tokenize_records(records)
+    word_counts = FreqDist(records_tokenized)
+    important_words_with_counts = dict()
+    for word in important_words:
+        important_words_with_counts[word] = word_counts[word]
+    synset_dict = generate_syn_set(important_words_with_counts.items())
     print_syn_set(synset_dict)
