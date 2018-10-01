@@ -74,8 +74,6 @@ def print_syn_set(syn_set):
 if __name__ == "__main__":
     args = wordcount.parse_arguments()
     records = wordcount.load_records(args.file)
-    # tokenized_records = wordcount.tokenize_records(records)
-    # frequent_words = wordcount.extract_frequent_words(tokenized_records, 500)
     tf_idf_scores = tfidf.tf_idf(records)
     important_words = tfidf.extract_important_words(tf_idf_scores, 500)
     records_tokenized = wordcount.tokenize_records(records)
