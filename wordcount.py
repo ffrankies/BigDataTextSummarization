@@ -17,14 +17,9 @@ spark_context = pyspark.SparkContext.getOrCreate()
 spark_context.setLogLevel("OFF")
 sql_context = pyspark.SQLContext(spark_context)
 
-from nltk import pos_tag
 from nltk.collocations import BigramAssocMeasures
 from nltk.collocations import BigramCollocationFinder 
 from nltk.corpus import wordnet
-from nltk.tokenize import word_tokenize
-from nltk.corpus import stopwords
-from nltk.corpus import words as nltk_words
-from nltk.stem import WordNetLemmatizer
 from nltk.probability import FreqDist
 
 import constants
@@ -76,6 +71,19 @@ POS_TRANSLATOR = {
 }
 
 
+def rdd_show(rdd, heading="=====RDD====="):
+    """data_frame.show() for an RDD
+
+    Params:
+    - rdd (pyspark.rdd.RDD): The RDD whose contents to show
+    - heading (str): The heading to print above the rdd
+    """
+    print(heading)
+    for row in rdd.take(5):
+        print(row)
+# End of show()
+
+
 def parse_arguments():
     """Parses command-line arguments.
 
@@ -100,13 +108,14 @@ def load_records(file, preview_records=False):
     - file (str): The path to the JSON file
 
     Returns:
-    - records (list<dict>): The contents of the JSON file
+    - records (pyspark.rdd.RDD): The contents of the JSON file
     """
     data_frame = sql_context.read.json(file)
     data_frame.show(n=5, truncate=100)
     records = data_frame.select(constants.TEXT)
-    records = records.filter(F.length(F.col(constants.TEXT)) > 99)
-    records.show(n=5, truncate=100)
+    records = records.filter(F.length(F.col(constants.TEXT)) > 99).rdd
+    rdd_show(records)
+    print('type of records = ', type(records))
     return records
 # End of load_records()
 
@@ -115,11 +124,33 @@ def tokenize_records(records):
     """Tokenizes the records into word lists. Filters out any stopwords in the list.
 
     Params:
-    - records (list<dict>): The non-empty records from the JSON file
+    - records (pyspark.sql.dataframe.DataFrame): The non-empty records from the JSON file
 
     Returns:
     - records_tokenized (list<list<str>>): The tokenized text content of the records
     """
+    from nltk import pos_tag
+    from nltk.tokenize import word_tokenize
+    from nltk.stem import WordNetLemmatizer
+    
+    lemmatizer = WordNetLemmatizer()
+
+    def tokenize_row(row):
+        lowercase = row[constants.TEXT].encode('utf-8').lower()
+        tokenized = word_tokenize(lowercase)
+        tagged = pos_tag(tokenized)
+        filtered = filter_stopwords(tagged)
+        lemmatized = map(lambda word: lemmatizer.lemmatize(word[0], POS_TRANSLATOR[word[1]]).encode('utf-8'), filtered)
+        return list(lemmatized)
+
+    tokens = records.map(tokenize_row)
+    rdd_show(tokens)
+    contents = records.withColumn('tokens', records.foreach(tokenize_row))
+    contents.show()
+    contents = records.apply(F.col(constants.TEXT).encode('utf-8').lower())
+    contents.show(n=5, truncate=100)
+    contents.withColumn('tokens', word_tokenize(contents.select(constants.TEXT)))
+    contents.show(n=5, truncate=100)
     contents = map(lambda record: record[constants.TEXT].encode('utf-8'), records)
     records_tokenized = [word_tokenize(record.lower()) for record in contents]
     records_lemmatized = lemmatize_records(records_tokenized)
@@ -147,7 +178,7 @@ def lemmatize_records(records):
     """
     print('Length of tagged_records: {:d}'.format(len(records)))
     print('Total number of words: {:d}'.format(sum([len(record) for record in records])))
-    tagged_records = map(lambda record: pos_tag(record), records)
+    # tagged_records = map(lambda record: pos_tag(record), records)
     tagged_records = filter_stopwords(tagged_records)
     lemmatizer = WordNetLemmatizer()
     records_lemmatized = list()
@@ -165,17 +196,19 @@ def lemmatize_records(records):
 # End of lemmatize_records()
 
 
-def filter_stopwords(tagged_records):
+def filter_stopwords(tagged_record):
     """Filters stopwords, punctuation, and contractions from the tagged records. This is done after tagging to make
     sure that the tagging is as accurate as possible.
 
     Params:
-    - tagged_records (list<list<tuple<str, str>>>): The records, with each word tagged with its part of speech
+    - tagged_record (list<tuple<str, str>>): The records, with each word tagged with its part of speech
 
     Returns:
-    - filtered_records (list<list<tuple<str, str>>>): The records, with unimportant words filtered out
+    - filtered_record (list<tuple<str, str>>): The records, with unimportant words filtered out
     """
-    print('Filtering stopwords')
+    from nltk.corpus import stopwords
+    from nltk.corpus import words as nltk_words
+
     stop_words = list(stopwords.words('english'))
     stop_words.extend(string.punctuation)
     stop_words.extend(constants.CONTRACTIONS)
@@ -185,13 +218,18 @@ def filter_stopwords(tagged_records):
     def not_dictionary_word(word): 
         return word[0] not in dictionary_words and word[1] not in ['NNP', 'NNPS']
 
-    filtered_records = [filter(lambda word: word[0] not in stop_words, record) for record in tagged_records]
-    filtered_records = [filter(lambda word: not_dictionary_word, record) for record in filtered_records]
-    filtered_records = [filter(lambda word: not word[0].replace('.', '', 1).isdigit(), record)
-                        for record in filtered_records]  # see https://stackoverflow.com/a/23639915/5760608
-    filtered_records = [list(filter(lambda word: word[1] in POS_TRANSLATOR.keys(), record))
-                        for record in filtered_records]
-    return filtered_records
+    filtered_record = filter(lambda word: word[0] not in stop_words, tagged_record)
+    filtered_record = filter(not_dictionary_word, filtered_record)
+    filtered_record = filter(lambda word: not word[0].replace('.', '', 1).isdigit(), filtered_record)
+    filtered_record = list(filter(lambda word: word[1] in POS_TRANSLATOR.keys(), filtered_record))
+
+    # filtered_records = [filter(lambda word: word[0] not in stop_words, record) for record in tagged_records]
+    # filtered_records = [filter(lambda word: not_dictionary_word, record) for record in filtered_records]
+    # filtered_records = [filter(lambda word: not word[0].replace('.', '', 1).isdigit(), record)
+    #                     for record in filtered_records]  # see https://stackoverflow.com/a/23639915/5760608
+    # filtered_records = [list(filter(lambda word: word[1] in POS_TRANSLATOR.keys(), record))
+    #                     for record in filtered_records]
+    return filtered_record
 # End of filter_stopwords()
 
 
