@@ -1,12 +1,21 @@
 # coding: utf-8
 """Using word frequencies to create a summary.
 """
+# from sparknlp.base import *
+
 import io
 import argparse
 import json
 import string
 import random
 import pprint
+
+import pyspark
+import pyspark.sql.functions as F
+
+spark_context = pyspark.SparkContext.getOrCreate()
+spark_context.setLogLevel("OFF")
+sql_context = pyspark.SQLContext(spark_context)
 
 from nltk import pos_tag
 from nltk.collocations import BigramAssocMeasures
@@ -93,13 +102,11 @@ def load_records(file, preview_records=False):
     Returns:
     - records (list<dict>): The contents of the JSON file
     """
-    with io.open(file, mode='r', encoding='utf-8') as json_file:
-        records = json_file.readlines()
-    records = [json.loads(record) for record in records]
-    records = list(filter(lambda record: record[constants.TEXT] != '', records))
-    if preview_records:
-        print("=====Random Sample of Records=====")
-        pprint.pprint(random.sample(records, k=5))
+    data_frame = sql_context.read.json(file)
+    data_frame.show(n=5, truncate=100)
+    records = data_frame.select(constants.TEXT)
+    records = records.filter(F.length(F.col(constants.TEXT)) > 99)
+    records.show(n=5, truncate=100)
     return records
 # End of load_records()
 
