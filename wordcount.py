@@ -1,6 +1,7 @@
+# coding: utf-8
 """Using word frequencies to create a summary.
 """
-
+import io
 import argparse
 import json
 import string
@@ -92,13 +93,13 @@ def load_records(file, preview_records=False):
     Returns:
     - records (list<dict>): The contents of the JSON file
     """
-    with open(file, 'r') as json_file:
+    with io.open(file, mode='r', encoding='utf-8') as json_file:
         records = json_file.readlines()
     records = [json.loads(record) for record in records]
     records = list(filter(lambda record: record[constants.TEXT] != '', records))
     if preview_records:
         print("=====Random Sample of Records=====")
-        pprint.pprint(random.choices(records, k=10))
+        pprint.pprint(random.sample(records, k=5))
     return records
 # End of load_records()
 
@@ -110,19 +111,19 @@ def tokenize_records(records):
     - records (list<dict>): The non-empty records from the JSON file
 
     Returns:
-    - tokenized_records (list<list<str>>): The tokenized text content of the records
+    - records_tokenized (list<list<str>>): The tokenized text content of the records
     """
-    contents = map(lambda record: record[constants.TEXT], records)
-    tokenized_records = [word_tokenize(record.lower()) for record in contents]
-    lemmatized_records = lemmatize_words(tokenized_records)
+    contents = map(lambda record: record[constants.TEXT].encode('utf-8'), records)
+    records_tokenized = [word_tokenize(record.lower()) for record in contents]
+    records_lemmatized = lemmatize_records(records_tokenized)
     lemmatized_words = list()
-    for lemmatized_record in lemmatized_records:
-        lemmatized_words.extend(lemmatized_record)
+    for record in records_lemmatized:
+        lemmatized_words.extend(record)
     return lemmatized_words
 # End of tokenize_records()
 
 
-def lemmatize_words(records):
+def lemmatize_records(records):
     """Lemmatizes the words in the tokenized sentences.
 
     Lemmatization works best when the words are tagged with their corresponding part of speech, so the words are first
@@ -135,24 +136,26 @@ def lemmatize_words(records):
     - records (list<list<str>>): The word-tokenized records
 
     Returns:
-    - lemmatized_records (list<str>)): The lemmatized words from all the records
+    - records_lemmatized (list<str>)): The lemmatized words from all the records
     """
     print('Length of tagged_records: {:d}'.format(len(records)))
     print('Total number of words: {:d}'.format(sum([len(record) for record in records])))
     tagged_records = map(lambda record: pos_tag(record), records)
     tagged_records = filter_stopwords(tagged_records)
     lemmatizer = WordNetLemmatizer()
-    lemmatized_records = list()
+    records_lemmatized = list()
     for record in tagged_records:
         try:
-            lemmatized_record = list(map(lambda word: lemmatizer.lemmatize(word[0], POS_TRANSLATOR[word[1]]), record))
+            lemmatized_record = list(
+                map(lambda word: lemmatizer.lemmatize(word[0], POS_TRANSLATOR[word[1]]).encode('utf-8'), record)
+            )
         except Exception as err:
             print(record)
             raise err
-        lemmatized_records.append(lemmatized_record)
-    print('Total number of words after filtering: {:d}'.format(len(lemmatized_records)))
-    return lemmatized_records
-# End of lemmatize_words()
+        records_lemmatized.append(lemmatized_record)
+    print('Total number of words after filtering: {:d}'.format(len(records_lemmatized)))
+    return records_lemmatized
+# End of lemmatize_records()
 
 
 def filter_stopwords(tagged_records):
@@ -256,7 +259,7 @@ def extract_collocations(records, num_collocations, collocation_window, compare_
 
 if __name__ == "__main__":
     args = parse_arguments()
-    records = load_records(args.file, False)
-    tokenized_records = tokenize_records(records)
-    extract_frequent_words(tokenized_records, args.num_words, True)
-    extract_collocations(tokenized_records, args.num_collocations, args.collocation_window, False)
+    records = load_records(args.file)
+    records_tokenized = tokenize_records(records)
+    extract_frequent_words(records_tokenized, args.num_words, True)
+    extract_collocations(records_tokenized, args.num_collocations, args.collocation_window, False)

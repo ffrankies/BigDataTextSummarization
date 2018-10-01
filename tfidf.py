@@ -1,3 +1,4 @@
+# coding: utf-8
 """Uses tf-idf to extract important words from a collection of documents.
 """
 
@@ -25,9 +26,9 @@ def term_frequency(tokenized_records):
     word_counts = FreqDist(tokenized_records)
     term_frequencies = dict(word_counts)
     unique_words = term_frequencies.keys()
-    num_words = len(tokenized_records)
+    num_words = float(len(tokenized_records))
     for word in unique_words:
-        term_frequencies[word] = term_frequencies[word] / num_words
+        term_frequencies[word] = float(term_frequencies[word]) / num_words
     return term_frequencies
 # End of term_frequency()
 
@@ -44,13 +45,13 @@ def inverse_document_frequency(lemmatized_records, unique_words):
     - inverse_document_frequencies (dict): The inverse document frequency of each word
     """
     inverse_document_frequencies = dict()
-    num_records = len(lemmatized_records)
+    num_records = float(len(lemmatized_records))
     for word in unique_words:
-        num_records_present = 0
+        num_records_present = 0.0
         for record in lemmatized_records:
             if word in record:
                 num_records_present += 1
-        idf = math.log(num_records_present / num_records, 10)
+        idf = math.log(num_records / num_records_present, 10)
         inverse_document_frequencies[word] = idf
     return inverse_document_frequencies
 # End of inverse_document_frequency()
@@ -66,9 +67,9 @@ def tf_idf(records):
     Returns:
     - tf_idf_scores (list): The tf-idf score for each lemmatized non-stopword in the dataset
     """
-    contents = map(lambda record: record[constants.TEXT], records)
+    contents = map(lambda record: record[constants.TEXT].encode('utf-8'), records)
     word_tokenized_records = [wordcount.word_tokenize(record.lower()) for record in contents]
-    lemmatized_records = wordcount.lemmatize_words(word_tokenized_records)
+    lemmatized_records = wordcount.lemmatize_records(word_tokenized_records)
     tokenized_records = list()
     for lemmatized_record in lemmatized_records:
         tokenized_records.extend(lemmatized_record)
@@ -91,7 +92,7 @@ def extract_important_words(tf_idf_scores, num_words):
     Returns:
     - important_words (list): The list of words with the highest tf-idf score
     """
-    sorted_scores = sorted(tf_idf_scores, key=lambda score: score[1])
+    sorted_scores = sorted(tf_idf_scores, key=lambda score: score[1], reverse=True)
     important_words = [score[0] for score in sorted_scores[:num_words]]
     return important_words
 # End of extract_important_words()
