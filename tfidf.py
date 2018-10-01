@@ -51,6 +51,8 @@ def inverse_document_frequency(lemmatized_records, unique_words):
         for record in lemmatized_records:
             if word in record:
                 num_records_present += 1
+        if num_records_present < 0.1 * num_records:
+            continue
         idf = math.log(num_records / num_records_present, 10)
         inverse_document_frequencies[word] = idf
     return inverse_document_frequencies
@@ -76,7 +78,7 @@ def tf_idf(records):
     term_frequencies = term_frequency(tokenized_records)
     inverse_document_frequencies = inverse_document_frequency(lemmatized_records, term_frequencies.keys())
     tf_idf_scores = list()
-    for word in term_frequencies.keys():
+    for word in inverse_document_frequencies.keys():
         tf_idf_scores.append((word, term_frequencies[word] * inverse_document_frequencies[word]))
     return tf_idf_scores
 # End of tf_idf()
