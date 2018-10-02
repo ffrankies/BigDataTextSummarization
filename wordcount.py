@@ -114,14 +114,13 @@ def load_records(file, preview_records=False):
     data_frame.show(n=5, truncate=100)
     records = data_frame.select(constants.TEXT)
     records = records.filter(F.length(F.col(constants.TEXT)) > 99).rdd
-    rdd_show(records)
-    print('type of records = ', type(records))
+    rdd_show(records, "=====Loaded Records=====")
     return records
 # End of load_records()
 
 
-def tokenize_records(records):
-    """Tokenizes the records into word lists. Filters out any stopwords in the list.
+def preprocess_records(records):
+    """Preprocesses the records into lemma lists. Filters out any stopwords or non-dictionary words in the list.
 
     Params:
     - records (pyspark.sql.dataframe.DataFrame): The non-empty records from the JSON file
@@ -135,30 +134,74 @@ def tokenize_records(records):
     
     lemmatizer = WordNetLemmatizer()
 
-    def tokenize_row(row):
-        lowercase = row[constants.TEXT].encode('utf-8').lower()
-        tokenized = word_tokenize(lowercase)
-        tagged = pos_tag(tokenized)
-        filtered = filter_stopwords(tagged)
-        lemmatized = map(lambda word: lemmatizer.lemmatize(word[0], POS_TRANSLATOR[word[1]]).encode('utf-8'), filtered)
-        return list(lemmatized)
+    records_tokenized = records.map(lambda record: tokenize_record(record, word_tokenize))
+    records_tagged = records_tokenized.map(pos_tag)
+    records_filtered = records_tagged.map(filter_stopwords)
+    records_lemmatized = records_filtered.map(lambda record: lemmatize_record(record, lemmatizer))
+    rdd_show(records_lemmatized, "=====Lemmatized Records=====")
 
-    tokens = records.map(tokenize_row)
-    rdd_show(tokens)
-    contents = records.withColumn('tokens', records.foreach(tokenize_row))
-    contents.show()
-    contents = records.apply(F.col(constants.TEXT).encode('utf-8').lower())
-    contents.show(n=5, truncate=100)
-    contents.withColumn('tokens', word_tokenize(contents.select(constants.TEXT)))
-    contents.show(n=5, truncate=100)
-    contents = map(lambda record: record[constants.TEXT].encode('utf-8'), records)
-    records_tokenized = [word_tokenize(record.lower()) for record in contents]
-    records_lemmatized = lemmatize_records(records_tokenized)
-    lemmatized_words = list()
-    for record in records_lemmatized:
-        lemmatized_words.extend(record)
-    return lemmatized_words
+    return records_lemmatized
 # End of tokenize_records()
+
+
+def tokenize_record(record, f_tokenize):
+    """Tokenizes a single record (row) in the RDD.
+
+    Params:
+    - record (str): The record to be tokenized
+    - f_tokenize (function): The function doing the tokenization
+    """
+    lowercase = record[constants.TEXT].encode('utf-8').lower()
+    tokenized = f_tokenize(lowercase)
+    return tokenized
+# End of tokenize_record()
+
+
+def filter_stopwords(tagged_record):
+    """Filters stopwords, punctuation, and contractions from the tagged records. This is done after tagging to make
+    sure that the tagging is as accurate as possible.
+
+    Params:
+    - tagged_record (list<tuple<str, str>>): The records, with each word tagged with its part of speech
+
+    Returns:
+    - filtered_record (list<tuple<str, str>>): The records, with unimportant words filtered out
+    """
+    print('type of row = ', type(tagged_record))
+    from nltk.corpus import stopwords
+    from nltk.corpus import words as nltk_words
+
+    stop_words = list(stopwords.words('english'))
+    stop_words.extend(string.punctuation)
+    stop_words.extend(constants.CONTRACTIONS)
+    stop_words.extend(constants.MYSQL_STOPWORDS)
+    dictionary_words = set(nltk_words.words())
+
+    def not_dictionary_word(word): 
+        return word[0] not in dictionary_words and word[1] not in ['NNP', 'NNPS']
+
+    filtered_record = filter(lambda word: word[0] not in stop_words, tagged_record)
+    filtered_record = filter(not_dictionary_word, filtered_record)
+    filtered_record = filter(lambda word: not word[0].replace('.', '', 1).isdigit(), filtered_record)
+    filtered_record = list(filter(lambda word: word[1] in POS_TRANSLATOR.keys(), filtered_record))
+    return filtered_record
+# End of filter_stopwords()
+
+
+def lemmatize_record(tagged_record, lemma_model):
+    """Lemmatizes the words in the given record, provided they're tagged with their correct part of speech.
+
+    Params:
+    - tagged_record (???): The record, as a list of tokens with their part of speech tag
+    - lemma_model (wordnet.Lemmatizer): The lemmatizer model
+
+    Returns:
+    - record_lemmatized (list<str, str>): The tagged lemmas for each word in the record
+    """
+    record_lemmatized = [lemma_model.lemmatize(word[0], POS_TRANSLATOR[word[1]]).encode('utf-8')
+                         for word in tagged_record]
+    return record_lemmatized
+# End of lemmatize_record()
 
 
 def lemmatize_records(records):
@@ -194,43 +237,6 @@ def lemmatize_records(records):
     print('Total number of words after filtering: {:d}'.format(len(records_lemmatized)))
     return records_lemmatized
 # End of lemmatize_records()
-
-
-def filter_stopwords(tagged_record):
-    """Filters stopwords, punctuation, and contractions from the tagged records. This is done after tagging to make
-    sure that the tagging is as accurate as possible.
-
-    Params:
-    - tagged_record (list<tuple<str, str>>): The records, with each word tagged with its part of speech
-
-    Returns:
-    - filtered_record (list<tuple<str, str>>): The records, with unimportant words filtered out
-    """
-    from nltk.corpus import stopwords
-    from nltk.corpus import words as nltk_words
-
-    stop_words = list(stopwords.words('english'))
-    stop_words.extend(string.punctuation)
-    stop_words.extend(constants.CONTRACTIONS)
-    stop_words.extend(constants.MYSQL_STOPWORDS)
-    dictionary_words = set(nltk_words.words())
-
-    def not_dictionary_word(word): 
-        return word[0] not in dictionary_words and word[1] not in ['NNP', 'NNPS']
-
-    filtered_record = filter(lambda word: word[0] not in stop_words, tagged_record)
-    filtered_record = filter(not_dictionary_word, filtered_record)
-    filtered_record = filter(lambda word: not word[0].replace('.', '', 1).isdigit(), filtered_record)
-    filtered_record = list(filter(lambda word: word[1] in POS_TRANSLATOR.keys(), filtered_record))
-
-    # filtered_records = [filter(lambda word: word[0] not in stop_words, record) for record in tagged_records]
-    # filtered_records = [filter(lambda word: not_dictionary_word, record) for record in filtered_records]
-    # filtered_records = [filter(lambda word: not word[0].replace('.', '', 1).isdigit(), record)
-    #                     for record in filtered_records]  # see https://stackoverflow.com/a/23639915/5760608
-    # filtered_records = [list(filter(lambda word: word[1] in POS_TRANSLATOR.keys(), record))
-    #                     for record in filtered_records]
-    return filtered_record
-# End of filter_stopwords()
 
 
 def extract_frequent_words(records, num_words, no_counts=False):
@@ -305,6 +311,6 @@ def extract_collocations(records, num_collocations, collocation_window, compare_
 if __name__ == "__main__":
     args = parse_arguments()
     records = load_records(args.file)
-    records_tokenized = tokenize_records(records)
-    extract_frequent_words(records_tokenized, args.num_words, True)
+    records_lemmatized = preprocess_records(records)
+    extract_frequent_words(records_lemmatized, args.num_words, True)
     extract_collocations(records_tokenized, args.num_collocations, args.collocation_window, False)
