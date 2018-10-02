@@ -9,16 +9,16 @@ import json
 import string
 import random
 import pprint
+from operator import add
 
 import pyspark
+from pyspark.sql import Row
 import pyspark.sql.functions as F
 
 spark_context = pyspark.SparkContext.getOrCreate()
 spark_context.setLogLevel("OFF")
 sql_context = pyspark.SQLContext(spark_context)
 
-from nltk.collocations import BigramAssocMeasures
-from nltk.collocations import BigramCollocationFinder 
 from nltk.corpus import wordnet
 from nltk.probability import FreqDist
 
@@ -256,8 +256,14 @@ def extract_frequent_words(records, num_words, no_counts=False):
     Returns:
     - frequent_words (list<str> or list<tuple<str, int>>): The list of most frequent words
     """
-    word_counts = FreqDist(records)
-    frequent_words = word_counts.most_common(num_words)
+    # @see https://github.com/apache/spark/blob/master/examples/src/main/python/wordcount.py
+    word_counts = records.flatMap(lambda x: x)\
+        .map(lambda x: (x, 1))\
+        .reduceByKey(add)\
+        .sortBy(lambda a: a[1], ascending=False)
+    rdd_show(word_counts, "=====Word Counts=====")
+
+    frequent_words = word_counts.take(num_words)
     if no_counts:
         frequent_words = [word[0] for word in frequent_words]
     print("=====The {:d} Most Frequent Words=====".format(num_words))
@@ -266,7 +272,7 @@ def extract_frequent_words(records, num_words, no_counts=False):
 # End of extract_frequent_words()
 
 
-def extract_collocations(records, num_collocations, collocation_window, compare_collocations = False):
+def extract_collocations(records, num_collocations, collocation_window, compare_collocations=False):
     """Extracts the most common collocations present in the records.
 
     Params:
@@ -277,34 +283,25 @@ def extract_collocations(records, num_collocations, collocation_window, compare_
     Returns:
     - best_collocations (list<tuple<str>>): The highest scored collocations present in the records
     """
-    bigram_measures = BigramAssocMeasures()
-    bigram_finder = BigramCollocationFinder.from_words(records, window_size=collocation_window)
-    bigram_finder.apply_freq_filter(min_freq=3)
-    best_collocations = bigram_finder.nbest(bigram_measures.raw_freq, num_collocations)
+    # @see: https://spark.apache.org/docs/2.2.0/ml-features.html#n-gram
+    from pyspark.ml.feature import NGram
+    
+    data_frame = records.map(lambda l: Row(l)).toDF(['words'])
+    ngram_model = NGram(n=2, inputCol='words', outputCol='ngrams')
+    ngram_data_frame = ngram_model.transform(data_frame)
+    
+    ngram_rdd = ngram_data_frame.select('ngrams').rdd
+    ngram_rdd = ngram_rdd.flatMap(lambda row: row['ngrams'])\
+        .map(lambda ngram: (ngram.encode('utf-8'), 1))\
+        .reduceByKey(add)\
+        .sortBy(lambda x: x[1], ascending=False)
+    rdd_show(ngram_rdd)
+
+    frequent_collocations = ngram_rdd.take(num_collocations)
     print("=====The {:d} Most Frequent Collocations=====".format(num_collocations))
-    pprint.pprint(best_collocations)
-    if compare_collocations:
-        print("=====The {:d} Best Collocations (Pointwise Mutual Information)=====".format(num_collocations))
-        pprint.pprint(bigram_finder.nbest(bigram_measures.pmi, num_collocations))
-        print("=====The {:d} Best Collocations (Student's t test)=====".format(num_collocations))
-        pprint.pprint(bigram_finder.nbest(bigram_measures.student_t, num_collocations))
-        print("=====The {:d} Best Collocations (Chi-square test)=====".format(num_collocations))
-        pprint.pprint(bigram_finder.nbest(bigram_measures.chi_sq, num_collocations))
-        print("=====The {:d} Best Collocations (Mutual Information)=====".format(num_collocations))
-        pprint.pprint(bigram_finder.nbest(bigram_measures.mi_like, num_collocations))
-        print("=====The {:d} Best Collocations (Likelihood Ratios)=====".format(num_collocations))
-        pprint.pprint(bigram_finder.nbest(bigram_measures.likelihood_ratio, num_collocations))
-        print("=====The {:d} Best Collocations (Poisson Stirling)=====".format(num_collocations))
-        pprint.pprint(bigram_finder.nbest(bigram_measures.poisson_stirling, num_collocations))
-        print("=====The {:d} Best Collocations (Jaccard Index)=====".format(num_collocations))
-        pprint.pprint(bigram_finder.nbest(bigram_measures.jaccard, num_collocations))
-        print("=====The {:d} Best Collocations (Phi-square test)=====".format(num_collocations))
-        pprint.pprint(bigram_finder.nbest(bigram_measures.phi_sq, num_collocations))
-        print("=====The {:d} Best Collocations (Fisher's Exact Test)=====".format(num_collocations))
-        pprint.pprint(bigram_finder.nbest(bigram_measures.fisher, num_collocations))
-        print("=====The {:d} Best Collocations (Dice's Coefficient)=====".format(num_collocations))
-        pprint.pprint(bigram_finder.nbest(bigram_measures.dice, num_collocations))
-    return best_collocations
+    pprint.pprint(frequent_collocations)
+
+    return frequent_collocations
 # End of extract_collocations()
 
 
@@ -312,5 +309,5 @@ if __name__ == "__main__":
     args = parse_arguments()
     records = load_records(args.file)
     records_lemmatized = preprocess_records(records)
-    extract_frequent_words(records_lemmatized, args.num_words, True)
-    extract_collocations(records_tokenized, args.num_collocations, args.collocation_window, False)
+    extract_frequent_words(records_lemmatized, args.num_words, False)
+    extract_collocations(records_lemmatized, args.num_collocations, args.collocation_window, False)
