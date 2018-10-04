@@ -53,6 +53,9 @@
 - We're looking at using synonyms of the words to give them more meaning / context
 - For example, 'fire' has multiple meanings. If we surround it with the synonyms for the *correct* usage of the word in context, the summary will make more 'sense'
 - It can also decrease our word count by grouping similar words together
+- To accomplish this grouping, we are first using our preprocessing and frequency counter from unit one to get a list of the top 'n' most frequent words paired with the amount of times that they appear.
+- We generate a synset for all of the words in this frequency list and increment the counter of the root word by the frequency each of the synonyms appears.
+- If a synonym does not appear at all in the frequency list, then it is omitted from the final results.
 
 ## Unit 3 - A set of words constrained by POS, e.g., nouns and/or verbs
 
