@@ -97,23 +97,6 @@ The labeled data is the same for all teams, stored in `/home/public/cs4984_cs598
 
 We will have accounts on 3 different machines / clusters - Dr. Fox's Hadoop cluster (for distributed processing), and the Huckleberry and Cascades clusters (GPUs for Deep Learning).
 
-Logins:
-
-### DLRL Hadoop Cluster
-
-- Username: cs4984cs5984f18_team12
-- Password: drivers alarums
-  - Note the space between the two words0
-- Login: ssh cs4984cs5984f18_team12@hadoop.dlib.vt.edu -p 2222
-
-### Huckleberry
-
-- Need to request a login for this cluster
-- 
-### Cascades
-
-- Need to request a login for this cluster
-
 ## Easy Log-In
 
 Typing that long username + password is a pain. There's an easier way to log in to remote systems.
@@ -126,12 +109,12 @@ Typing that long username + password is a pain. There's an easier way to log in 
     Host somehost
         HostName 1.1.1.1
         Port 22
-        User someuser
+        User [some user]
 
     Host dlib
         HostName hadoop.dlib.vt.edu
         Port 2222
-        User cs4984cs5984f18_team12
+        User [team name]
     ```
   - The `Host` can be any name you want, you just have to remember it, so make it descriptive
 - Now, you can ssh into any of the hosts in the config file by typing `ssh [name of host]` (e.g. `ssh dlib`)
