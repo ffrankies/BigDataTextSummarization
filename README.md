@@ -53,6 +53,9 @@
 - We're looking at using synonyms of the words to give them more meaning / context
 - For example, 'fire' has multiple meanings. If we surround it with the synonyms for the *correct* usage of the word in context, the summary will make more 'sense'
 - It can also decrease our word count by grouping similar words together
+- To accomplish this grouping, we are first using our preprocessing and frequency counter from unit one to get a list of the top 'n' most frequent words paired with the amount of times that they appear.
+- We generate a synset for all of the words in this frequency list and increment the counter of the root word by the frequency each of the synonyms appears.
+- If a synonym does not appear at all in the frequency list, then it is omitted from the final results.
 
 ## Unit 3 - A set of words constrained by POS, e.g., nouns and/or verbs
 
@@ -94,23 +97,6 @@ The labeled data is the same for all teams, stored in `/home/public/cs4984_cs598
 
 We will have accounts on 3 different machines / clusters - Dr. Fox's Hadoop cluster (for distributed processing), and the Huckleberry and Cascades clusters (GPUs for Deep Learning).
 
-Logins:
-
-### DLRL Hadoop Cluster
-
-- Username: cs4984cs5984f18_team12
-- Password: drivers alarums
-  - Note the space between the two words0
-- Login: ssh cs4984cs5984f18_team12@hadoop.dlib.vt.edu -p 2222
-
-### Huckleberry
-
-- Need to request a login for this cluster
-- 
-### Cascades
-
-- Need to request a login for this cluster
-
 ## Easy Log-In
 
 Typing that long username + password is a pain. There's an easier way to log in to remote systems.
@@ -123,12 +109,12 @@ Typing that long username + password is a pain. There's an easier way to log in 
     Host somehost
         HostName 1.1.1.1
         Port 22
-        User someuser
+        User [some user]
 
     Host dlib
         HostName hadoop.dlib.vt.edu
         Port 2222
-        User cs4984cs5984f18_team12
+        User [team name]
     ```
   - The `Host` can be any name you want, you just have to remember it, so make it descriptive
 - Now, you can ssh into any of the hosts in the config file by typing `ssh [name of host]` (e.g. `ssh dlib`)
