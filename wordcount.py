@@ -3,11 +3,8 @@
 """
 # from sparknlp.base import *
 
-import io
 import argparse
-import json
 import string
-import random
 import pprint
 from operator import add
 
@@ -20,10 +17,14 @@ spark_context.setLogLevel("OFF")
 sql_context = pyspark.SQLContext(spark_context)
 
 from nltk.corpus import wordnet
-from nltk.probability import FreqDist
 
 import constants
 
+###########################
+# Set up nltk
+###########################
+from nltk import pos_tag
+from nltk.stem import WordNetLemmatizer
 
 ###########################
 # PART OF SPEECH TAG TRANSLATOR FROM `pos_tag` TAGS to `wordnet` TAGS
@@ -67,8 +68,12 @@ POS_TRANSLATOR = {
     'WDT': DEFAULT_TAG,    # wh-determiner   which
     'WP': DEFAULT_TAG,     # wh-pronoun   who, what
     'WP$': DEFAULT_TAG,    # possessive wh-pronoun   whose
-    'WRB': wordnet.ADV     # wh-abverb  where, when
+    'WRB': wordnet.ADV     # wh-adverb  where, when
 }
+
+TEXT_FIELD = constants.TEXT
+CONTRACTIONS = constants.CONTRACTIONS
+MYSQL_STOPWORDS = constants.MYSQL_STOPWORDS
 
 
 def rdd_show(rdd, heading="=====RDD====="):
@@ -112,8 +117,8 @@ def load_records(file, preview_records=False):
     """
     data_frame = sql_context.read.json(file)
     data_frame.show(n=5, truncate=100)
-    records = data_frame.select(constants.TEXT)
-    records = records.filter(F.length(F.col(constants.TEXT)) > 99).rdd
+    records = data_frame.select(TEXT_FIELD)
+    records = records.filter(F.length(F.col(TEXT_FIELD)) > 99).rdd
     rdd_show(records, "=====Loaded Records=====")
     return records
 # End of load_records()
@@ -128,15 +133,14 @@ def preprocess_records(records):
     Returns:
     - records_tokenized (list<list<str>>): The tokenized text content of the records
     """
-    from nltk import pos_tag
-    from nltk.tokenize import word_tokenize
-    from nltk.stem import WordNetLemmatizer
-    
     lemmatizer = WordNetLemmatizer()
 
-    records_tokenized = records.map(lambda record: tokenize_record(record, word_tokenize))
+    records_tokenized = records.map(lambda record: tokenize_record(record))
+    rdd_show(records_tokenized, "=====Tokenized Records=====")
     records_tagged = records_tokenized.map(pos_tag)
+    rdd_show(records_tagged, "=====Tagged Records=====")
     records_filtered = records_tagged.map(filter_stopwords)
+    rdd_show(records_filtered, "=====Filtered Records=====")
     records_lemmatized = records_filtered.map(lambda record: lemmatize_record(record, lemmatizer))
     rdd_show(records_lemmatized, "=====Lemmatized Records=====")
 
@@ -144,15 +148,17 @@ def preprocess_records(records):
 # End of tokenize_records()
 
 
-def tokenize_record(record, f_tokenize):
+def tokenize_record(record):
     """Tokenizes a single record (row) in the RDD.
 
     Params:
     - record (str): The record to be tokenized
-    - f_tokenize (function): The function doing the tokenization
     """
-    lowercase = record[constants.TEXT].encode('utf-8').lower()
-    tokenized = f_tokenize(lowercase)
+    import nltk
+    # from nltk.tokenize import word_tokenize as f2_tokenize
+    lowercase = record[TEXT_FIELD].encode('utf-8').lower()
+    tokenized = nltk.word_tokenize(lowercase)
+    # tokenized = f2_tokenize(lowercase)
     return tokenized
 # End of tokenize_record()
 
@@ -162,29 +168,28 @@ def filter_stopwords(tagged_record):
     sure that the tagging is as accurate as possible.
 
     Params:
-    - tagged_record (list<tuple<str, str>>): The records, with each word tagged with its part of speech
+    - tagged_record (pyspark.rdd.RDD): The records, with each word tagged with its part of speech
 
     Returns:
     - filtered_record (list<tuple<str, str>>): The records, with unimportant words filtered out
     """
-    print('type of row = ', type(tagged_record))
     from nltk.corpus import stopwords
     from nltk.corpus import words as nltk_words
 
     stop_words = list(stopwords.words('english'))
     stop_words.extend(string.punctuation)
-    stop_words.extend(constants.CONTRACTIONS)
-    stop_words.extend(constants.MYSQL_STOPWORDS)
+    stop_words.extend(CONTRACTIONS)
+    stop_words.extend(MYSQL_STOPWORDS)
     dictionary_words = set(nltk_words.words())
 
-    def not_dictionary_word(word): 
+    def not_dictionary_word(word):
         return word[0] not in dictionary_words and word[1] not in ['NNP', 'NNPS']
 
     filtered_record = filter(lambda word: word[0] not in stop_words, tagged_record)
     filtered_record = filter(not_dictionary_word, filtered_record)
     filtered_record = filter(lambda word: not word[0].replace('.', '', 1).isdigit(), filtered_record)
-    filtered_record = list(filter(lambda word: word[1] in POS_TRANSLATOR.keys(), filtered_record))
-    return filtered_record
+    filtered_record = filter(lambda word: word[1] in POS_TRANSLATOR.keys(), filtered_record)
+    return list(filtered_record)
 # End of filter_stopwords()
 
 
@@ -204,45 +209,10 @@ def lemmatize_record(tagged_record, lemma_model):
 # End of lemmatize_record()
 
 
-def lemmatize_records(records):
-    """Lemmatizes the words in the tokenized sentences.
-
-    Lemmatization works best when the words are tagged with their corresponding part of speech, so the words are first
-    tagged using nltk's `pos_tag` function.
-
-    NB: There is a good chance that this tagging isn't 100% accurate. For that matter, lemmatization isn't always 100%
-    accurate.
-
-    Params:
-    - records (list<list<str>>): The word-tokenized records
-
-    Returns:
-    - records_lemmatized (list<str>)): The lemmatized words from all the records
-    """
-    print('Length of tagged_records: {:d}'.format(len(records)))
-    print('Total number of words: {:d}'.format(sum([len(record) for record in records])))
-    # tagged_records = map(lambda record: pos_tag(record), records)
-    tagged_records = filter_stopwords(tagged_records)
-    lemmatizer = WordNetLemmatizer()
-    records_lemmatized = list()
-    for record in tagged_records:
-        try:
-            lemmatized_record = list(
-                map(lambda word: lemmatizer.lemmatize(word[0], POS_TRANSLATOR[word[1]]).encode('utf-8'), record)
-            )
-        except Exception as err:
-            print(record)
-            raise err
-        records_lemmatized.append(lemmatized_record)
-    print('Total number of words after filtering: {:d}'.format(len(records_lemmatized)))
-    return records_lemmatized
-# End of lemmatize_records()
-
-
 def extract_frequent_words(records, num_words, no_counts=False):
     """Stems the words in the given records, and then counts the words using NLTK FreqDist.
 
-    Stemming is done using the English Snowball stemmer as per the recommendation from 
+    Stemming is done using the English Snowball stemmer as per the recommendation from
     http://www.nltk.org/howto/stem.html
 
     NB: There is also a Lancaster stemmer available, but it is apparently very aggressive and can lead to a loss of
@@ -285,11 +255,11 @@ def extract_collocations(records, num_collocations, collocation_window, compare_
     """
     # @see: https://spark.apache.org/docs/2.2.0/ml-features.html#n-gram
     from pyspark.ml.feature import NGram
-    
+
     data_frame = records.map(lambda l: Row(l)).toDF(['words'])
     ngram_model = NGram(n=2, inputCol='words', outputCol='ngrams')
     ngram_data_frame = ngram_model.transform(data_frame)
-    
+
     ngram_rdd = ngram_data_frame.select('ngrams').rdd
     ngram_rdd = ngram_rdd.flatMap(lambda row: row['ngrams'])\
         .map(lambda ngram: (ngram.encode('utf-8'), 1))\
