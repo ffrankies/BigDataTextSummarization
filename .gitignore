@@ -90,3 +90,4 @@ out.txt
 .vscode/
 *.zip
 metastore_db/
+spark-warehouse/
