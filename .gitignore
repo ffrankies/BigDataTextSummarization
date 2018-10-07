@@ -88,3 +88,5 @@ venv.bak/
 sentences/
 out.txt
 .vscode/
+*.zip
+metastore_db/
