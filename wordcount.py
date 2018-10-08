@@ -155,10 +155,9 @@ def tokenize_record(record):
     - record (str): The record to be tokenized
     """
     import nltk
-    # from nltk.tokenize import word_tokenize as f2_tokenize
+    
     lowercase = record[TEXT_FIELD].encode('utf-8').lower()
     tokenized = nltk.word_tokenize(lowercase)
-    # tokenized = f2_tokenize(lowercase)
     return tokenized
 # End of tokenize_record()
 
@@ -182,11 +181,11 @@ def filter_stopwords(tagged_record):
     stop_words.extend(MYSQL_STOPWORDS)
     dictionary_words = set(nltk_words.words())
 
-    def not_dictionary_word(word):
-        return word[0] not in dictionary_words and word[1] not in ['NNP', 'NNPS']
+    def noun_or_dictionary_word(word):
+        return word[0] in dictionary_words or word[1] in ['NNP', 'NNPS']
 
     filtered_record = filter(lambda word: word[0] not in stop_words, tagged_record)
-    filtered_record = filter(not_dictionary_word, filtered_record)
+    filtered_record = filter(noun_or_dictionary_word, filtered_record)
     filtered_record = filter(lambda word: not word[0].replace('.', '', 1).isdigit(), filtered_record)
     filtered_record = filter(lambda word: word[1] in POS_TRANSLATOR.keys(), filtered_record)
     return list(filtered_record)
