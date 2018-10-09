@@ -16,12 +16,10 @@
 - [Useful Info](#useful-info)
   - [Data](#data)
   - [Accounts](#accounts)
-    - [DLRL Hadoop Cluster](#dlrl-hadoop-cluster)
-    - [Huckleberry](#huckleberry)
-    - [Cascades](#cascades)
   - [Easy Log-In](#easy-log-in)
   - [Tools](#tools)
     - [Hadoop](#hadoop)
+  - [Project Report](#project-report)
 
 # Workflow
 
@@ -136,3 +134,9 @@ This is a tool for distributed data processing. Essentially consists of four par
 I suspect we'll be using this quite a bit, but will not be doing anything crazy with it.
 
 Our unlabeled data is currently in the hadoop file system. It is stored in the ff directory: `/user/cs4984cs5984f18_team12/unalabed/`. This contains a WARC file and an index file into the WARC records. 
+
+## Project Report
+
+Our project report is on Overleaf at https://www.overleaf.com/project/5baf017bdbd72865e7330ac6
+
+At the moment, if you need a reference added to the bibliography, you need to send me (Frank) the link to it, and hae me add it to my Mendeley account. Otherwise, we can create a group Mendeley account.
