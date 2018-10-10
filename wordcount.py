@@ -155,7 +155,7 @@ def tokenize_record(record):
     - record (str): The record to be tokenized
     """
     import nltk
-    
+
     lowercase = record[TEXT_FIELD].encode('utf-8').lower()
     tokenized = nltk.word_tokenize(lowercase)
     return tokenized
@@ -235,19 +235,17 @@ def extract_frequent_words(records, num_words, no_counts=False):
     frequent_words = word_counts.take(num_words)
     if no_counts:
         frequent_words = [word[0] for word in frequent_words]
-    print("=====The {:d} Most Frequent Words=====".format(num_words))
-    print(frequent_words)
     return frequent_words
 # End of extract_frequent_words()
 
 
-def extract_collocations(records, num_collocations, collocation_window, compare_collocations=False):
+def extract_collocations(records, num_collocations, collocation_window):
     """Extracts the most common collocations present in the records.
 
     Params:
     - records (list<list<str>>): The tokenized and lemmatized records from the JSON file
     - num_collocations (int): The number of collocations to show
-    - collocation_window (int): The text window within which to search for collocations
+    - collocation_window (int): The text window within which to search for collocations.
 
     Returns:
     - best_collocations (list<tuple<str>>): The highest scored collocations present in the records
@@ -267,16 +265,47 @@ def extract_collocations(records, num_collocations, collocation_window, compare_
     rdd_show(ngram_rdd)
 
     frequent_collocations = ngram_rdd.take(num_collocations)
-    print("=====The {:d} Most Frequent Collocations=====".format(num_collocations))
-    pprint.pprint(frequent_collocations)
 
     return frequent_collocations
 # End of extract_collocations()
+
+
+def merge_collocations_with_wordlist(collocations, wordlist):
+    """Filters collocations to only return those where both words are in the wordlist. Then returns the collocations
+    and the words from the wordlist that aren't in any collocations.
+
+    Params:
+    - collocations (list<tuple<str, str>>): The collocations to merge with the word list
+    - wordlist (list<str>): The words to filter by
+
+    Returns:
+    - merged_list (list<str>): List of words and collocations
+    """
+    unused_words = set(wordlist)
+    merged_list = list()
+    for collocation in collocations:  # collocations look like: "one two"
+        word_one, word_two = collocation.split(" ")
+        if word_one != word_two and word_one in unused_words and word_two in unused_words:
+            merged_list.append(collocation)
+            unused_words -= set([word_one, word_two])
+    merged_list.extend(unused_words)
+    return merged_list
+# End of merge_collocations_with_wordlist()
 
 
 if __name__ == "__main__":
     args = parse_arguments()
     records = load_records(args.file)
     records_lemmatized = preprocess_records(records)
-    extract_frequent_words(records_lemmatized, args.num_words, False)
-    extract_collocations(records_lemmatized, args.num_collocations, args.collocation_window, False)
+    frequent_words = extract_frequent_words(records_lemmatized, args.num_words, False)
+    print("=====The {:d} Most Frequent Words=====".format(args.num_words))
+    print(frequent_words)
+    frequent_collocations = extract_collocations(records_lemmatized, args.num_collocations, args.collocation_window)
+    print("=====The {:d} Most Frequent Collocations=====".format(args.num_collocations))
+    pprint.pprint(frequent_collocations)
+    # Strip counts
+    frequent_words = [word[0] for word in frequent_words]
+    frequent_collocations = [collocation[0] for collocation in frequent_collocations]
+    words_and_collocations = merge_collocations_with_wordlist(frequent_collocations, frequent_words)
+    print("=====Most Frequent Words And Collocations=====")
+    print(words_and_collocations)
