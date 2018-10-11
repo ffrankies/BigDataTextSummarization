@@ -86,7 +86,8 @@ def extract_important_words(tf_idf_scores, num_words, strip_scores=True):
     - important_words (list): The list of words with the highest tf-idf score
     """
     important_words = sorted(tf_idf_scores, key=lambda score: score[1], reverse=True)
-    important_words = [score[0] for score in important_words[:num_words]]
+    if strip_scores:
+        important_words = [score[0] for score in important_words[:num_words]]
     return important_words
 # End of extract_important_words()
 
