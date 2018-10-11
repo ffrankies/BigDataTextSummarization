@@ -5,10 +5,7 @@
 import math
 from operator import add
 
-from nltk.probability import FreqDist
-
 import wordcount
-import constants
 
 
 def term_frequency(lemmatized_records):
@@ -77,18 +74,19 @@ def tf_idf(records):
 # End of tf_idf()
 
 
-def extract_important_words(tf_idf_scores, num_words):
+def extract_important_words(tf_idf_scores, num_words, strip_scores=True):
     """Extracts important words based on their tf_idf_scores.
 
     Params:
     - tf_idf_scores (list): The tf-idf score of each word in the document
     - num_words (int): The number of words to extract
+    - strip_scores (bool): If set to True, will split TF-IDF scores from the result
 
     Returns:
     - important_words (list): The list of words with the highest tf-idf score
     """
-    sorted_scores = sorted(tf_idf_scores, key=lambda score: score[1], reverse=True)
-    important_words = [score[0] for score in sorted_scores[:num_words]]
+    important_words = sorted(tf_idf_scores, key=lambda score: score[1], reverse=True)
+    important_words = [score[0] for score in important_words[:num_words]]
     return important_words
 # End of extract_important_words()
 
@@ -98,5 +96,12 @@ if __name__ == "__main__":
     records = wordcount.load_records(args.file, False)
     records = wordcount.preprocess_records(records)
     tf_idf_scores = tf_idf(records)
-    important_words = extract_important_words(tf_idf_scores, args.num_words)
+    # Pyspark technically ends here - the rest is processed on master node
+    important_words = extract_important_words(tf_idf_scores, args.num_words, False)
+    print("=====Important Words Identified by TF-IDF=====")
     print(important_words)
+    collocations = wordcount.extract_collocations(records, args.num_collocations, args.collocation_window)
+    collocations = [collocation[0] for collocation in collocations]
+    words_and_collocations = wordcount.merge_collocations_with_wordlist(collocations, important_words)
+    print("=====Important Words and Collocations=====")
+    print(words_and_collocations)
