@@ -1,6 +1,5 @@
 # coding: utf-8
 from nltk.corpus import wordnet
-from nltk.probability import FreqDist
 
 import wordcount
 import tfidf
@@ -73,13 +72,18 @@ def print_syn_set(syn_set):
 
 if __name__ == "__main__":
     args = wordcount.parse_arguments()
-    records = wordcount.load_records(args.file)
+    records = wordcount.load_records(args.file, False)
+    records = wordcount.preprocess_records(records)
+    frequent_words = wordcount.extract_frequent_words(records, args.num_words * 10, False)
+    frequent_words = dict(frequent_words)
     tf_idf_scores = tfidf.tf_idf(records)
-    important_words = tfidf.extract_important_words(tf_idf_scores, 500)
-    records_tokenized = wordcount.tokenize_records(records)
-    word_counts = FreqDist(records_tokenized)
+    # Pyspark technically ends here - the rest is processed on master node
+    important_words = tfidf.extract_important_words(tf_idf_scores, args.num_words, True)
     important_words_with_counts = dict()
     for word in important_words:
-        important_words_with_counts[word] = word_counts[word]
+        if word in frequent_words:
+            important_words_with_counts[word] = frequent_words[word]
+        else:
+            print(word, " not in frequent words but in important words")
     synset_dict = generate_syn_set(important_words_with_counts.items())
     print_syn_set(synset_dict)
