@@ -281,9 +281,11 @@ def merge_collocations_with_wordlist(collocations, wordlist):
     Returns:
     - merged_list (list<str>): List of words and collocations
     """
-    unused_words = set(wordlist)
+    words = [word[0] for word in wordlist]
+    word_pairs = [collocation[0] for collocation in collocations]
+    unused_words = set(words)
     merged_list = list()
-    for collocation in collocations:  # collocations look like: "one two"
+    for collocation in word_pairs:  # collocations look like: "one two"
         word_one, word_two = collocation.split(" ")
         if word_one != word_two and word_one in unused_words and word_two in unused_words:
             merged_list.append(collocation)
@@ -304,8 +306,6 @@ if __name__ == "__main__":
     print("=====The {:d} Most Frequent Collocations=====".format(args.num_collocations))
     pprint.pprint(frequent_collocations)
     # Strip counts
-    frequent_words = [word[0] for word in frequent_words]
-    frequent_collocations = [collocation[0] for collocation in frequent_collocations]
     words_and_collocations = merge_collocations_with_wordlist(frequent_collocations, frequent_words)
     print("=====Most Frequent Words And Collocations=====")
     print(words_and_collocations)
