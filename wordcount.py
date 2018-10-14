@@ -118,7 +118,12 @@ def load_records(file, preview_records=False):
     data_frame = sql_context.read.json(file)
     data_frame.show(n=5, truncate=100)
     records = data_frame.select(TEXT_FIELD)
-    records = records.filter(F.length(F.col(TEXT_FIELD)) > 99).rdd
+    # Filter out records shorter than 100 characters. Then,
+    # add a unique ID to each record. Then,
+    # make the ID the first element in the record, so it can be used as a key
+    records = records.filter(F.length(F.col(TEXT_FIELD)) > 99).rdd\
+        .zipWithUniqueId()\
+        .map(lambda record: (record[1], record[0]))
     rdd_show(records, "=====Loaded Records=====")
     return records
 # End of load_records()
@@ -135,9 +140,9 @@ def preprocess_records(records):
     """
     lemmatizer = WordNetLemmatizer()
 
-    records_tokenized = records.map(lambda record: tokenize_record(record))
+    records_tokenized = records.map(tokenize_record)
     rdd_show(records_tokenized, "=====Tokenized Records=====")
-    records_tagged = records_tokenized.map(pos_tag)
+    records_tagged = records_tokenized.map(lambda record: (record[constants.KEY], pos_tag(record[constants.VALUE])))
     rdd_show(records_tagged, "=====Tagged Records=====")
     records_filtered = records_tagged.map(filter_stopwords)
     rdd_show(records_filtered, "=====Filtered Records=====")
@@ -156,9 +161,10 @@ def tokenize_record(record):
     """
     import nltk
 
-    lowercase = record[TEXT_FIELD].encode('utf-8').lower()
+    key, record_contents = record
+    lowercase = record_contents[TEXT_FIELD].encode('utf-8').lower()
     tokenized = nltk.word_tokenize(lowercase)
-    return tokenized
+    return (key, tokenized)
 # End of tokenize_record()
 
 
@@ -175,6 +181,7 @@ def filter_stopwords(tagged_record):
     from nltk.corpus import stopwords
     from nltk.corpus import words as nltk_words
 
+    key, record = tagged_record
     stop_words = list(stopwords.words('english'))
     stop_words.extend(string.punctuation)
     stop_words.extend(CONTRACTIONS)
@@ -184,11 +191,11 @@ def filter_stopwords(tagged_record):
     def noun_or_dictionary_word(word):
         return word[0] in dictionary_words or word[1] in ['NNP', 'NNPS']
 
-    filtered_record = filter(lambda word: word[0] not in stop_words, tagged_record)
+    filtered_record = filter(lambda word: word[0] not in stop_words, record)
     filtered_record = filter(noun_or_dictionary_word, filtered_record)
     filtered_record = filter(lambda word: not word[0].replace('.', '', 1).isdigit(), filtered_record)
     filtered_record = filter(lambda word: word[1] in POS_TRANSLATOR.keys(), filtered_record)
-    return list(filtered_record)
+    return (key, list(filtered_record))
 # End of filter_stopwords()
 
 
@@ -202,9 +209,10 @@ def lemmatize_record(tagged_record, lemma_model):
     Returns:
     - record_lemmatized (list<str, str>): The tagged lemmas for each word in the record
     """
+    key, record = tagged_record
     record_lemmatized = [lemma_model.lemmatize(word[0], POS_TRANSLATOR[word[1]]).encode('utf-8')
-                         for word in tagged_record]
-    return record_lemmatized
+                         for word in record]
+    return (key, record_lemmatized)
 # End of lemmatize_record()
 
 
@@ -226,10 +234,10 @@ def extract_frequent_words(records, num_words, no_counts=False):
     - frequent_words (list<str> or list<tuple<str, int>>): The list of most frequent words
     """
     # @see https://github.com/apache/spark/blob/master/examples/src/main/python/wordcount.py
-    word_counts = records.flatMap(lambda x: x)\
-        .map(lambda x: (x, 1))\
+    word_counts = records.flatMap(lambda record: record[constants.VALUE])\
+        .map(lambda word: (word, 1))\
         .reduceByKey(add)\
-        .sortBy(lambda a: a[1], ascending=False)
+        .sortBy(lambda word_with_count: word_with_count[1], ascending=False)
     rdd_show(word_counts, "=====Word Counts=====")
 
     frequent_words = word_counts.take(num_words)
@@ -253,7 +261,7 @@ def extract_collocations(records, num_collocations, collocation_window):
     # @see: https://spark.apache.org/docs/2.2.0/ml-features.html#n-gram
     from pyspark.ml.feature import NGram
 
-    data_frame = records.map(lambda l: Row(l)).toDF(['words'])
+    data_frame = records.map(lambda record: Row(record[constants.VALUE])).toDF(['words'])
     ngram_model = NGram(n=2, inputCol='words', outputCol='ngrams')
     ngram_data_frame = ngram_model.transform(data_frame)
 
@@ -261,7 +269,7 @@ def extract_collocations(records, num_collocations, collocation_window):
     ngram_rdd = ngram_rdd.flatMap(lambda row: row['ngrams'])\
         .map(lambda ngram: (ngram.encode('utf-8'), 1))\
         .reduceByKey(add)\
-        .sortBy(lambda x: x[1], ascending=False)
+        .sortBy(lambda bigram_with_count: bigram_with_count[1], ascending=False)
     rdd_show(ngram_rdd)
 
     frequent_collocations = ngram_rdd.take(num_collocations)
