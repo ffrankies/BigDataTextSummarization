@@ -91,3 +91,4 @@ out.txt
 *.zip
 metastore_db/
 spark-warehouse/
+*.out
