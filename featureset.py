@@ -1,12 +1,61 @@
 # coding: utf-8
 """Constructs bag-of-words-inspired feature sets out of the preprocessed records.
 """
+import json
+import argparse
+
+import pyspark.sql.functions as F
 from pyspark.sql.types import Row
+from nltk.tokenize import sent_tokenize
 
 import wordcount
 import tfidf
 import synsets
 import constants
+
+
+def parse_arguments():
+    """Parses command-line arguments.
+
+    Returns:
+    - args (argparse.Namespace): The parsed arguments
+    """
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-f', '--file', type=str, help='The path to the JSON file containing processed text')
+    parser.add_argument('-w', '--num_words', type=int, help='The number of frequent words to print out', default=20)
+    parser.add_argument('-c', '--num_collocations', type=int, help='The number of collocations to print out',
+                        default=10)
+    parser.add_argument('-cw', '--collocation_window', type=int, help='The window for searching for collocations',
+                        default=5)
+    parser.add_argument('-s', '--sentences', type=bool, action='store_true')
+    parser.add_argument('-o', '--output', type=str, help='The directory in which to save the featureset dataset')
+    return parser.parse_args()
+# End of parse_arguments()
+
+
+def load_sentences(dataset_path):
+    """Loads the dataset as a list of sentences.
+
+    Params:
+    - dataset_path (str): Path to dataset
+
+    Returns:
+    - sentences (pyspark.rdd.RDD): RDD containing sentences
+    """
+    data_frame = wordcount.sql_context.read.json(dataset_path)
+    data_frame.show(n=5, truncate=100)
+    records = data_frame.select(wordcount.TEXT_FIELD)
+    # Filter out records shorter than 100 characters. Then,
+    # add a unique ID to each record. Then,
+    # make the ID the first element in the record, so it can be used as a key
+    records = records.filter(F.length(F.col(wordcount.TEXT_FIELD)) > 99).rdd\
+        .flatMap(lambda record: sent_tokenize(record[wordcount.TEXT_FIELD]))\
+        .map(lambda record: Row(Sentences_t=record))\
+        .zipWithUniqueId()\
+        .map(lambda record: (record[1], record[0]))
+    wordcount.rdd_show(records, "=====Loaded Sentences=====")
+    return records
+# End of load_sentences
 
 
 def get_bag_of_words_labels(preprocessed_records, args):
@@ -43,7 +92,8 @@ def get_bag_of_words_labels(preprocessed_records, args):
                 synset = [word.encode('utf-8') for word in synset[1:]]
                 bag_of_words_labels.append(synset)
     # Save bag of words labels to single text file
-    wordcount.spark_context.parallelize(bag_of_words_labels).coalesce(1).saveAsTextFile('bag_of_words_labels')
+    with open("bag_of_words_labels.json", "w") as bow_file:
+        json.dump(bag_of_words_labels, bow_file)
     return bag_of_words_labels
 # End of get_bag_of_words_labels()
 
@@ -144,7 +194,7 @@ def create_dataset_from_feature_sets(records, preprocessed_records, presence_fea
 # End of create_dataset_from_feature_sets()
 
 
-def save_dataset_as_dataframe(dataset):
+def save_dataset_as_dataframe(dataset, filename):
     """Converts the dataset RDD to a dataFrame and saves it as multiple JSON files.
 
     Params:
@@ -155,18 +205,34 @@ def save_dataset_as_dataframe(dataset):
                              presence_feature_set=record[3], count_feature_set=record[4]))
     data_frame = data_frame.toDF()
     data_frame.show()
-    data_frame.write.json("feature_set_large", mode="overwrite")
+    data_frame.write.json(filename, mode="overwrite")
 # End of save_dataset_as_dataframe()
 
 
 if __name__ == "__main__":
-    args = wordcount.parse_arguments()
-    records = wordcount.load_records(args.file, False)
-    preprocessed_records = wordcount.preprocess_records(records)
-    bag_of_words_labels = get_bag_of_words_labels(preprocessed_records, args)
-    presence_feature_set = preprocessed_records.map(
-        lambda record: make_presence_feature_set(record, bag_of_words_labels))
-    count_feature_set = preprocessed_records.map(lambda record: make_count_feature_set(record, bag_of_words_labels))
-    dataset = create_dataset_from_feature_sets(records, preprocessed_records, presence_feature_set, count_feature_set)
-    wordcount.rdd_show(dataset, "=====Dataset=====")
-    save_dataset_as_dataframe(dataset)
+    args = parse_arguments()
+    if args.sentences:
+        sentences = load_sentences(args.file)
+        with open("bag_of_words_labels.json", "r") as bow_file:
+            bag_of_words_labels = json.load(bow_file)
+        preprocessed_sentences = wordcount.preprocess_records(sentences)
+        presence_feature_set = preprocessed_sentences.map(
+            lambda record: make_presence_feature_set(record, bag_of_words_labels))
+        count_feature_set = preprocessed_sentences.map(
+            lambda record: make_count_feature_set(record, bag_of_words_labels))
+        dataset_sentences = create_dataset_from_feature_sets(
+            sentences, preprocessed_sentences, presence_feature_set, count_feature_set)
+        wordcount.rdd_show(dataset_sentences, "=====Dataset=====")
+        save_dataset_as_dataframe(dataset_sentences, args.output)
+    else:
+        records = wordcount.load_records(args.file, False)
+        preprocessed_records = wordcount.preprocess_records(records)
+        bag_of_words_labels = get_bag_of_words_labels(preprocessed_records, args)
+        presence_feature_set = preprocessed_records.map(
+            lambda record: make_presence_feature_set(record, bag_of_words_labels))
+        count_feature_set = preprocessed_records.map(
+            lambda record: make_count_feature_set(record, bag_of_words_labels))
+        dataset = create_dataset_from_feature_sets(
+            records, preprocessed_records, presence_feature_set, count_feature_set)
+        wordcount.rdd_show(dataset, "=====Dataset=====")
+        save_dataset_as_dataframe(dataset, args.output)
