@@ -1,5 +1,7 @@
 """Automatic labeling of records based off of basic statistics about the feature set.
 """
+import argparse
+
 import numpy as np
 
 import pyspark
@@ -7,6 +9,14 @@ from pyspark.sql import Row
 
 spark_context = pyspark.SparkContext.getOrCreate()
 sql_context = pyspark.SQLContext(spark_context)
+
+
+def parse_arguments():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-d', '--dataset', type=str, help='The dataset to classify')
+    parser.add_argument('-o', '--output', type=str, help='The output file containing relevant records')
+    return parser.parse_args()
+# End of parse_arguments()
 
 
 def read_dataset_as_rdd(dataset_path):
@@ -35,7 +45,7 @@ def add_feature_counts_column(dataset_rdd):
     - feature_count_dataset_rdd (pyspark.rdd.RDD): The dataset, in RDD format, with a 'feature_count' column
     """
     feature_count_dataset_rdd = dataset_rdd\
-        .map(lambda row: Row(feature_count=sum(row['presence_feature_set'], **row.adDict())))
+        .map(lambda row: Row(feature_count=sum(row['presence_feature_set']), **row.asDict()))
     return feature_count_dataset_rdd
 # End of add_feature_counts_column()
 
@@ -108,7 +118,7 @@ def automatically_label_dataset(feature_count_dataset_rdd, feature_count_mean, f
 # End of automatically_label_dataset()
 
 
-def save_autolabeled_dataset(autolabeled_dataset):
+def save_autolabeled_dataset(autolabeled_dataset, output_filename):
     """Save the autolabeled dataset as a series of JSON files. First converts the RDD to a dataframe, because most
     pyspark Machine Learning approaches seem to use data frames (and also data frames are easier to save).
 
@@ -120,13 +130,14 @@ def save_autolabeled_dataset(autolabeled_dataset):
     """
     dataset_data_frame = autolabeled_dataset.toDF()
     dataset_data_frame.show()  # Show what we're saving
-    dataset_data_frame.write.json("autolabeled_dataset", mode="overwrite")
+    dataset_data_frame.write.json(output_filename, mode="overwrite")
 # End of save_autolabeled_dataset()
 
 
 if __name__ == "__main__":
-    dataset = read_dataset_as_rdd("feature_set_large")
+    args = parse_arguments()
+    dataset = read_dataset_as_rdd(args.dataset)
     dataset = add_feature_counts_column(dataset)
     feature_count_mean, feature_count_sd = get_feature_counts_statistics(dataset)
     dataset = automatically_label_dataset(dataset, feature_count_mean, feature_count_sd)
-    save_autolabeled_dataset(dataset)
+    save_autolabeled_dataset(dataset, args.output)
