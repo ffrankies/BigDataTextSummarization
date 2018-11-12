@@ -85,12 +85,8 @@ env.bak/
 venv.bak/
 
 # Additional stuff
-sentences/
 out.txt
-.vscode/
 *.zip
-metastore_db/
-spark-warehouse/
 *.out
-feature_set_large/
-small_feature_set/
+*/*
+*.ipynb
