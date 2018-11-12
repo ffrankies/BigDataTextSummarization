@@ -27,7 +27,7 @@ def parse_arguments():
                         default=10)
     parser.add_argument('-cw', '--collocation_window', type=int, help='The window for searching for collocations',
                         default=5)
-    parser.add_argument('-s', '--sentences', type=bool, action='store_true')
+    parser.add_argument('-s', '--sentences', action='store_true')
     parser.add_argument('-o', '--output', type=str, help='The directory in which to save the featureset dataset')
     return parser.parse_args()
 # End of parse_arguments()
@@ -45,10 +45,10 @@ def load_sentences(dataset_path):
     data_frame = wordcount.sql_context.read.json(dataset_path)
     data_frame.show(n=5, truncate=100)
     records = data_frame.select(wordcount.TEXT_FIELD)
-    # Filter out records shorter than 100 characters. Then,
+    # Filter out sentences shorter than 20 characters. Then,
     # add a unique ID to each record. Then,
     # make the ID the first element in the record, so it can be used as a key
-    records = records.filter(F.length(F.col(wordcount.TEXT_FIELD)) > 99).rdd\
+    records = records.filter(F.length(F.col(wordcount.TEXT_FIELD)) > 19).rdd\
         .flatMap(lambda record: sent_tokenize(record[wordcount.TEXT_FIELD]))\
         .map(lambda record: Row(Sentences_t=record))\
         .zipWithUniqueId()\
@@ -69,8 +69,6 @@ def get_bag_of_words_labels(preprocessed_records, args):
     Returns:
     - bag_of_words_labels (list<str|tuple<str>>): The labels of the bag of words created
     """
-    # frequent_words = wordcount.extract_frequent_words(preprocessed_records, args.num_words * 10, False)
-    # frequent_words = dict(frequent_words)
     frequent_collocations = wordcount.extract_collocations(preprocessed_records, args.num_collocations,
                                                            args.collocation_window)
     tf_idf_scores = tfidf.tf_idf(preprocessed_records)
@@ -218,8 +216,10 @@ if __name__ == "__main__":
         preprocessed_sentences = wordcount.preprocess_records(sentences)
         presence_feature_set = preprocessed_sentences.map(
             lambda record: make_presence_feature_set(record, bag_of_words_labels))
+        wordcount.rdd_show(presence_feature_set, "=====Presence Feature Set=====")
         count_feature_set = preprocessed_sentences.map(
             lambda record: make_count_feature_set(record, bag_of_words_labels))
+        wordcount.rdd_show(count_feature_set, "=====Count Feature Set=====")
         dataset_sentences = create_dataset_from_feature_sets(
             sentences, preprocessed_sentences, presence_feature_set, count_feature_set)
         wordcount.rdd_show(dataset_sentences, "=====Dataset=====")
@@ -228,10 +228,14 @@ if __name__ == "__main__":
         records = wordcount.load_records(args.file, False)
         preprocessed_records = wordcount.preprocess_records(records)
         bag_of_words_labels = get_bag_of_words_labels(preprocessed_records, args)
+        print("=====Bag of Words Labels=====")
+        print(bag_of_words_labels)
         presence_feature_set = preprocessed_records.map(
             lambda record: make_presence_feature_set(record, bag_of_words_labels))
+        wordcount.rdd_show(presence_feature_set, "=====Presence Feature Set=====")
         count_feature_set = preprocessed_records.map(
             lambda record: make_count_feature_set(record, bag_of_words_labels))
+        wordcount.rdd_show(count_feature_set, "=====Count Feature Set=====")
         dataset = create_dataset_from_feature_sets(
             records, preprocessed_records, presence_feature_set, count_feature_set)
         wordcount.rdd_show(dataset, "=====Dataset=====")
