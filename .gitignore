@@ -91,3 +91,6 @@ out.txt
 *.zip
 metastore_db/
 spark-warehouse/
+*.out
+feature_set_large/
+small_feature_set/

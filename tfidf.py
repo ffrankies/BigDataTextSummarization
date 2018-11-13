@@ -5,6 +5,7 @@
 import math
 from operator import add
 
+import constants
 import wordcount
 
 
@@ -21,8 +22,8 @@ def term_frequency(lemmatized_records):
     Returns:
     - term_frequencies (dict): The term frequency of each word
     """
-    lemma_counts = lemmatized_records.flatMap(lambda x: x)\
-        .map(lambda x: (x, 1.0))\
+    lemma_counts = lemmatized_records.flatMap(lambda record: record[constants.VALUE])\
+        .map(lambda lemma: (lemma, 1.0))\
         .reduceByKey(add)
     total_lemmas = lemma_counts.reduce(lambda x, y: ("", x[1] + y[1]))[1]
     term_frequencies = lemma_counts.map(lambda x: (x[0], x[1] / total_lemmas)).collect()
@@ -43,7 +44,7 @@ def inverse_document_frequency(lemmatized_records):
     - inverse_document_frequencies (dict): The inverse document frequency of each word
     """
     num_records = float(lemmatized_records.count())
-    inverse_document_frequencies = lemmatized_records.map(lambda record: set(record))\
+    inverse_document_frequencies = lemmatized_records.map(lambda record: set(record[constants.VALUE]))\
         .flatMap(lambda record: record)\
         .map(lambda lemma: (lemma, 1.0))\
         .reduceByKey(add)\
@@ -102,7 +103,7 @@ if __name__ == "__main__":
     print("=====Important Words Identified by TF-IDF=====")
     print(important_words)
     collocations = wordcount.extract_collocations(records, args.num_collocations, args.collocation_window)
-    collocations = [collocation[0] for collocation in collocations]
+    print("Collocations: ", collocations)
     words_and_collocations = wordcount.merge_collocations_with_wordlist(collocations, important_words)
     print("=====Important Words and Collocations=====")
     print(words_and_collocations)
