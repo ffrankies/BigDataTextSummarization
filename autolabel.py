@@ -8,13 +8,20 @@ import pyspark
 from pyspark.sql import Row
 
 spark_context = pyspark.SparkContext.getOrCreate()
+spark_context.setLogLevel("OFF")
 sql_context = pyspark.SQLContext(spark_context)
 
 
 def parse_arguments():
+    """Parses the command line arguments provided by the user.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', '--dataset', type=str, help='The dataset to classify')
     parser.add_argument('-o', '--output', type=str, help='The output file containing relevant records')
+    parser.add_argument('-i', '--irrelevant_t', type=float, default=2.0,
+                        help='The threshold below which record is irrelevant')
+    parser.add_argument('-r', '--relevant_t', type=float, default=2.0,
+                        help='Record is relevant if feature count > mean + relevant_t * s.d.')
     return parser.parse_args()
 # End of parse_arguments()
 
@@ -67,6 +74,37 @@ def get_feature_counts_statistics(feature_count_dataset_rdd):
 # End of get_feature_counts_statistics()
 
 
+def automatically_label_dataset(feature_count_dataset_rdd, feature_count_mean, feature_count_sd, irrelevant_t, 
+    relevant_t):
+    """Automatically labels the records in the dataset using the following rules:
+
+    - Relevent records are labeled with 1.0, irrelevant records are labeled with 0.0, maybes are labeled with -1.0
+    - A record is relevant if feature count > feature_count_mean + 2 * feature_count_sd
+    - A record is irrelevant if feature count <= 1
+
+    Params:
+    - feature_count_dataset_rdd (pyspark.rdd.RDD): The dataset, in RDD format, with a 'feature_count' column
+    - feature_count_mean (float): The mean of the feature counts
+    - feature_count_sd (float): The standard deviation of the feature counts
+    - irrelevant_t (float): If feature count < irrelevant_t, then the record is irrelevant
+    - relevant_t (float): If feature count > feature_count_mean + relevant_t * feature_count_sd, record is relevant
+
+    Returns:
+    - autolabeled_dataset (pyspark.rdd.RDD): The dataset, with automatic record labels
+    """
+    irrelevant_threshold = irrelevant_t
+    relevant_threshold = feature_count_mean + (relevant_t * feature_count_sd)
+    autolabeled_dataset = feature_count_dataset_rdd\
+        .map(lambda row: automatically_label_record(row, irrelevant_threshold, relevant_threshold))
+    num_positive = autolabeled_dataset.filter(lambda record: record['label'] == 1.0).count()
+    num_negative = autolabeled_dataset.filter(lambda record: record['label'] == 0.0).count()
+    print("====Autolabeled Statistics====")
+    print("Number of positive records | number of negative records | total records = ", num_positive, " | ", 
+          num_negative, " | ", autolabeled_dataset.count())
+    return autolabeled_dataset
+# End of automatically_label_dataset()
+
+
 def automatically_label_record(record_row, irrelevant_threshold, relevant_threshold):
     """Automatically label the record based on the following rules:
 
@@ -95,29 +133,6 @@ def automatically_label_record(record_row, irrelevant_threshold, relevant_thresh
 # End of automatically_label_record()
 
 
-def automatically_label_dataset(feature_count_dataset_rdd, feature_count_mean, feature_count_sd):
-    """Automatically labels the records in the dataset using the following rules:
-
-    - Relevent records are labeled with 1.0, irrelevant records are labeled with 0.0, maybes are labeled with -1.0
-    - A record is relevant if feature count > feature_count_mean + 2 * feature_count_sd
-    - A record is irrelevant if feature count <= 1
-
-    Params:
-    - feature_count_dataset_rdd (pyspark.rdd.RDD): The dataset, in RDD format, with a 'feature_count' column
-    - feature_count_mean (float): The mean of the feature counts
-    - feature_count_sd (float): The standard deviation of the feature counts
-
-    Returns:
-    - autolabeled_dataset (pyspark.rdd.RDD): The dataset, with automatic record labels
-    """
-    irrelevant_threshold = 2.0
-    relevant_threshold = feature_count_mean + (2 * feature_count_sd)
-    autolabeled_dataset = feature_count_dataset_rdd\
-        .map(lambda row: automatically_label_record(row, irrelevant_threshold, relevant_threshold))
-    return autolabeled_dataset
-# End of automatically_label_dataset()
-
-
 def save_autolabeled_dataset(autolabeled_dataset, output_filename):
     """Save the autolabeled dataset as a series of JSON files. First converts the RDD to a dataframe, because most
     pyspark Machine Learning approaches seem to use data frames (and also data frames are easier to save).
@@ -139,5 +154,6 @@ if __name__ == "__main__":
     dataset = read_dataset_as_rdd(args.dataset)
     dataset = add_feature_counts_column(dataset)
     feature_count_mean, feature_count_sd = get_feature_counts_statistics(dataset)
-    dataset = automatically_label_dataset(dataset, feature_count_mean, feature_count_sd)
+    dataset = automatically_label_dataset(dataset, feature_count_mean, feature_count_sd,
+                                          args.irrelevant_t, args.relevant_t)
     save_autolabeled_dataset(dataset, args.output)
