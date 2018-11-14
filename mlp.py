@@ -10,10 +10,11 @@ from pyspark.sql import Row
 from pyspark.ml.linalg import Vectors
 from pyspark.ml.classification import MultilayerPerceptronClassifier
 
+import wordcount
+
 spark_context = pyspark.SparkContext.getOrCreate()
 spark_context.setLogLevel("OFF")
 sql_context = pyspark.SQLContext(spark_context)
-
 
 def parse_arguments():
     """Parses command-line arguments.
@@ -24,6 +25,8 @@ def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', '--dataset', type=str, help='The dataset to classify')
     parser.add_argument('-o', '--output', type=str, help='The output file containing relevant records')
+    parser.add_argument('-s', '--combined_sentence_output', type=str, 
+                        help='If provided, sentences will be combined into records consisting of relevant sentences.')
     return parser.parse_args()
 # End of parse_arguments()
 
@@ -38,15 +41,28 @@ def load_dataset(dataset_dir):
     - rdd_vector_features (pyspark.rdd.RDD): The loaded dataset, with features as Vectors
     """
     data_frame = sql_context.read.json(dataset_dir)
-    rdd_vector_features = data_frame.rdd.map(lambda row: Row(
-        count_feature_set=Vectors.dense(row['count_feature_set']), 
-        presence_feature_set=Vectors.dense(row['presence_feature_set']),
-        feature_count=row['feature_count'],
-        id=row['id'],
-        label=row['label'],
-        preprocessed_record=row['preprocessed_record'],
-        record=row['record']
-    ))
+    data_frame.show()
+    if 'record_id' in data_frame.columns:
+        rdd_vector_features = data_frame.rdd.map(lambda row: Row(
+            count_feature_set=Vectors.dense(row['count_feature_set']), 
+            presence_feature_set=Vectors.dense(row['presence_feature_set']),
+            feature_count=row['feature_count'],
+            id=row['id'],
+            label=row['label'],
+            preprocessed_record=row['preprocessed_record'],
+            record=row['Sentences_t'].encode('utf-8'),
+            record_id=row['record_id']
+        ))
+    else:
+        rdd_vector_features = data_frame.rdd.map(lambda row: Row(
+            count_feature_set=Vectors.dense(row['count_feature_set']), 
+            presence_feature_set=Vectors.dense(row['presence_feature_set']),
+            feature_count=row['feature_count'],
+            id=row['id'],
+            label=row['label'],
+            preprocessed_record=row['preprocessed_record'],
+            record=row['Sentences_t'].encode('utf-8')
+        ))
     return rdd_vector_features
 # End of load_dataset()
 
@@ -189,18 +205,61 @@ def examine_predictions(relevant, irrelevant):
 # End of examine_predictions()
 
 
-def save_relevant_records(relevant, output_filename):
+def save_relevant_records(relevant, output_filename, combined_sentence_output):
     """Save relevant records to file.
 
     Params:
     - relevant (pyspark.rdd.RDD): The predicted relevant records
+    - output_filename (str): The name of the output file
+    - combined_sentence_output (str): The name of the output file for the combined relevant sentences
     """
-    relevant = relevant.map(
-        lambda row: Row(Sentences_t=row['record'].encode('utf-8'), preprocessed_record=row['preprocessed_record']))
-    data_frame = relevant.toDF()
+    def utf_encode_row(row):
+        """Forces UTF-8 encoding on the Sentences_t field of the row.
+        """
+        return Row(Sentences_t=row['record'].encode('utf-8'), **row.asDict())
+    
+    relevant = relevant.map(utf_encode_row)
+    data_frame = relevant.toDF()\
+        .drop(*['count_feature_set', 'feature_count', 'label', 'presence_feature_set', 'record'])
     data_frame.show()
     data_frame.write.json(output_filename, mode="overwrite")
+    combine_sentence_output(combined_sentence_output, data_frame)
 # End of save_relevant_records
+
+
+def combine_sentence_output(combined_sentence_output, sentences):
+    """Combines relevant sentences into records containing only relevant sentences and saves the result. If 
+    combined_sentence_output is empty, does nothing. 
+
+    Params:
+    - combined_sentence_output (str): The name of the output file for the combined relevant sentences
+    - sentences (pyspark.sql.DataFrame): The data frame to combine
+    """
+    if not combined_sentence_output:
+        return
+    sentences_ids = sentences.rdd.map(lambda sentence: (sentence['record_id'], [sentence['Sentences_t']])).collect()
+    sentences_aggregated = dict()
+    for key, contents in sentences_ids:
+        if key in sentences_aggregated:
+            if contents[0] not in sentences_aggregated[key]:  # Prevent duplicates
+                # print(contents[0], " not in ", sentences_aggregated[key])
+                sentences_aggregated[key].append(contents[0])
+        else:
+            sentences_aggregated[key] = contents
+    print("=====Sentences Aggregated=====")
+    print(sentences_aggregated.items()[:5])
+    reconstructed_records = list()
+    for key, relevant_sentences in sentences_aggregated.items():
+        if len(relevant_sentences) < 5:  # Skip over reconstructed record with less than 5 sentences
+            continue
+        # reconstructed_record = list(map(lambda sentence: sentence['Sentences_t'], relevant_sentences))
+        reconstructed_record = " ".join(relevant_sentences)
+        reconstructed_record_row = Row(Sentences_t=reconstructed_record)
+        reconstructed_records.append(reconstructed_record_row)
+    reconstructed_records = spark_context.parallelize(reconstructed_records)
+    wordcount.rdd_show(reconstructed_records, "====Reconstructed Records====")
+    reconstructed_records.toDF().write.json(combined_sentence_output, "overwrite")
+# End of combine_sentence_output()
 
 
 if __name__ == "__main__":
@@ -211,4 +270,4 @@ if __name__ == "__main__":
     model_accuracy(model, test)
     relevant, irrelevant = predict_and_separate(dataset, model)
     examine_predictions(relevant, irrelevant)
-    save_relevant_records(relevant, args.output)
+    save_relevant_records(relevant, args.output, args.combined_sentence_output)
