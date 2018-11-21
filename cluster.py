@@ -226,9 +226,49 @@ def lda(features, num_clusters):
 # End of lda()
 
 
+def separate_clusters(clustered, num_clusters):
+    """Separates the dataset into separate data frames, one for each cluster.
+
+    Params:
+    - clustered (pyspark.sql.DataFrame): The dataset with clustered items
+
+    Returns:
+    - clusters (list<pyspark.rdd.RDD>): The datasets of clustered items
+    """
+    print('Separating clusters')
+    clusters = list()
+    for i in range(num_clusters):
+        cluster = clustered.filter(clustered.cluster == i)
+        clusters.append(cluster)
+    return clusters
+# End of separate_clusters()
+
+
+def save_clusters(clusters, args):
+    """Saves the individual clusters to separate JSON files.
+
+    Params:
+    - clusters (list<pyspark.rdd.RDD>): The clustered datasets.
+    - args (argparse.Namespace): The command-line arguments
+    """
+    for index, cluster in enumerate(clusters):
+        # Build output filename
+        filename = "_".join([
+            args.dataset, 
+            str(args.num_clusters), 
+            args.method, 
+            args.feature_type, 
+            str(args.vocab_size)]) + "/cluster_" + str(index) + ".json"
+        cluster.coalesce(1).write.json(filename, mode='overwrite')
+        print("Saved cluster %d with %d elements" % (index, cluster.count()))
+# End of save_clusters()
+
+
 if __name__ == "__main__":
     args = parse_arguments()
     print("Arguments: ", args)
     dataset = load_dataset(args.dataset)
     dataset = compute_features(dataset, args.feature_type, args.vocab_size)
     dataset = do_cluster(dataset, args.method,  args.num_clusters)
+    clusters = separate_clusters(dataset, args.num_clusters)
+    save_clusters(clusters, args)
