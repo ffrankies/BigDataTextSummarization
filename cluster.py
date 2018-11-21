@@ -7,7 +7,7 @@ import argparse
 import pyspark
 from pyspark.sql import Row
 from pyspark.ml.feature import CountVectorizer, HashingTF, IDF, Tokenizer
-from pyspark.ml.clustering import KMeans, LDA
+from pyspark.ml.clustering import KMeans, LDA, BisectingKMeans
 from pyspark.ml.classification import MultilayerPerceptronClassifier
 
 from numpy import argmax
@@ -145,7 +145,7 @@ def do_cluster(features, cluster_method, num_clusters):
     - clustered (pyspark.sql.DataFrame): The data frame, with the predicted clusters in a 'cluster' column
     """
     if cluster_method == METHOD_BISECTING_KMEANS:
-        raise NotImplementedError('Bisecting Kmeans clustering not implemented yet')
+        clustered = bisecting_kmeans(features, num_clusters)
     elif cluster_method == METHOD_LDA:
         clustered = lda(features, num_clusters)
     elif cluster_method == METHOD_KMEANS:
@@ -167,6 +167,27 @@ def kmeans(features, num_clusters):
     - clustered (pyspark.sql.DataFrame): The data frame, with the predicted clusters in a 'cluster' column
     """
     kmeans = KMeans(k=num_clusters, featuresCol='features', predictionCol='cluster')
+    kmeans_model = kmeans.fit(features)
+    clustered = kmeans_model.transform(features)
+    clustered.show()
+    print("=====Clustering Results=====")
+    print("Clustering cost = ", kmeans_model.computeCost(features))
+    print("Cluster sizes = ", kmeans_model.summary.clusterSizes)
+    return clustered
+# End of kmeans()
+
+
+def bisecting_kmeans(features, num_clusters):
+    """Does clustering on the features dataset using Bisecting KMeans clustering.
+
+    Params:
+    - features (pyspark.sql.DataFrame): The data frame containing the features to be used for clustering
+    - num_clusters (int): The number of clusters to be used
+
+    Returns:
+    - clustered (pyspark.sql.DataFrame): The data frame, with the predicted clusters in a 'cluster' column
+    """
+    kmeans = BisectingKMeans(k=num_clusters, featuresCol='features', predictionCol='cluster')
     kmeans_model = kmeans.fit(features)
     clustered = kmeans_model.transform(features)
     clustered.show()
