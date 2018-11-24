@@ -10,6 +10,7 @@ from pyspark.ml.feature import CountVectorizer, HashingTF, IDF, Tokenizer
 from pyspark.ml.clustering import KMeans, LDA, BisectingKMeans
 from pyspark.ml.classification import MultilayerPerceptronClassifier
 
+import numpy as np
 from numpy import argmax
 
 import wordcount
@@ -226,6 +227,21 @@ def lda(features, num_clusters):
 # End of lda()
 
 
+def cluster_sizes_stats(clusters):
+    """Prints out statistics on the cluster sizes
+
+    Params:
+    - clusters (list<pyspark.rdd.RDD): The list of clusters
+    """
+    sizes = [cluster.count() for cluster in clusters]
+    median = np.median(sizes)
+    iqr = np.percentile(sizes, 75) - np.percentile(sizes, 25)
+    minimum = np.min(sizes)
+    maximum = np.max(sizes)
+    print("%d %f %f %d" % (minimum, median, iqr, maximum))
+# End of cluster_sizes_stats()
+
+
 def separate_clusters(clustered, num_clusters):
     """Separates the dataset into separate data frames, one for each cluster.
 
@@ -235,11 +251,11 @@ def separate_clusters(clustered, num_clusters):
     Returns:
     - clusters (list<pyspark.rdd.RDD>): The datasets of clustered items
     """
-    print('Separating clusters')
     clusters = list()
     for i in range(num_clusters):
         cluster = clustered.filter(clustered.cluster == i)
         clusters.append(cluster)
+    cluster_sizes_stats(clusters)
     return clusters
 # End of separate_clusters()
 
