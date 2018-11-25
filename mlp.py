@@ -42,27 +42,53 @@ def load_dataset(dataset_dir):
     """
     data_frame = sql_context.read.json(dataset_dir)
     data_frame.show()
-    if 'record_id' in data_frame.columns:
-        rdd_vector_features = data_frame.rdd.map(lambda row: Row(
-            count_feature_set=Vectors.dense(row['count_feature_set']), 
-            presence_feature_set=Vectors.dense(row['presence_feature_set']),
-            feature_count=row['feature_count'],
-            id=row['id'],
-            label=row['label'],
-            preprocessed_record=row['preprocessed_record'],
-            record=row['Sentences_t'].encode('utf-8'),
-            record_id=row['record_id']
-        ))
+    if 'URL_s' in data_frame.columns:
+        print("URLs are present in data frame")
+        if 'record_id' in data_frame.columns:
+            rdd_vector_features = data_frame.rdd.map(lambda row: Row(
+                count_feature_set=Vectors.dense(row['count_feature_set']), 
+                presence_feature_set=Vectors.dense(row['presence_feature_set']),
+                feature_count=row['feature_count'],
+                id=row['id'],
+                label=row['label'],
+                preprocessed_record=row['preprocessed_record'],
+                record=row['Sentences_t'].encode('utf-8'),
+                record_id=row['record_id'],
+                URL_s=row['URL_s']
+            ))
+        else:
+            rdd_vector_features = data_frame.rdd.map(lambda row: Row(
+                count_feature_set=Vectors.dense(row['count_feature_set']), 
+                presence_feature_set=Vectors.dense(row['presence_feature_set']),
+                feature_count=row['feature_count'],
+                id=row['id'],
+                label=row['label'],
+                preprocessed_record=row['preprocessed_record'],
+                record=row['Sentences_t'].encode('utf-8'),
+                URL_s=row['URL_s']
+            ))
     else:
-        rdd_vector_features = data_frame.rdd.map(lambda row: Row(
-            count_feature_set=Vectors.dense(row['count_feature_set']), 
-            presence_feature_set=Vectors.dense(row['presence_feature_set']),
-            feature_count=row['feature_count'],
-            id=row['id'],
-            label=row['label'],
-            preprocessed_record=row['preprocessed_record'],
-            record=row['Sentences_t'].encode('utf-8')
-        ))
+        if 'record_id' in data_frame.columns:
+            rdd_vector_features = data_frame.rdd.map(lambda row: Row(
+                count_feature_set=Vectors.dense(row['count_feature_set']), 
+                presence_feature_set=Vectors.dense(row['presence_feature_set']),
+                feature_count=row['feature_count'],
+                id=row['id'],
+                label=row['label'],
+                preprocessed_record=row['preprocessed_record'],
+                record=row['Sentences_t'].encode('utf-8'),
+                record_id=row['record_id']
+            ))
+        else:
+            rdd_vector_features = data_frame.rdd.map(lambda row: Row(
+                count_feature_set=Vectors.dense(row['count_feature_set']), 
+                presence_feature_set=Vectors.dense(row['presence_feature_set']),
+                feature_count=row['feature_count'],
+                id=row['id'],
+                label=row['label'],
+                preprocessed_record=row['preprocessed_record'],
+                record=row['Sentences_t'].encode('utf-8')
+            ))
     return rdd_vector_features
 # End of load_dataset()
 
