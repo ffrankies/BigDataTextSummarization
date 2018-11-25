@@ -11,6 +11,7 @@ import wordcount
 import tfidf
 import synsets
 import constants
+import os
 
 
 def parse_arguments():
@@ -288,7 +289,12 @@ if __name__ == "__main__":
     else:
         records = wordcount.load_records(args.file, False)
         preprocessed_contents = preprocess_records_keep_fields(records)
-        bag_of_words_labels = get_bag_of_words_labels(preprocessed_contents, args)
+        if os.path.isfile("bag_of_words_labels.json"):
+            print("Loading bag of words labels from file")
+            with open("bag_of_words_labels.json", "r") as bow_file:
+                bag_of_words_labels = json.load(bow_file)
+        else:
+            bag_of_words_labels = get_bag_of_words_labels(preprocessed_contents, args)
     feature_sets = preprocessed_contents.map(lambda contents: make_feature_sets(contents, bag_of_words_labels))
     dataset = feature_sets.toDF()
     save_dataset_as_dataframe(dataset, args.output)
