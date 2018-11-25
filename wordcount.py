@@ -117,11 +117,10 @@ def load_records(file, preview_records=False):
     """
     data_frame = sql_context.read.json(file)
     data_frame.show(n=5, truncate=100)
-    records = data_frame.select(TEXT_FIELD)
     # Filter out records shorter than 100 characters. Then,
     # add a unique ID to each record. Then,
     # make the ID the first element in the record, so it can be used as a key
-    records = records.filter(F.length(F.col(TEXT_FIELD)) > 99).rdd\
+    records = data_frame.filter(F.length(F.col(TEXT_FIELD)) > 99).rdd\
         .zipWithUniqueId()\
         .map(lambda record: (record[1], record[0]))
     rdd_show(records, "=====Loaded Records=====")
