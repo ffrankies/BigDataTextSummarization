@@ -1,6 +1,8 @@
 from nltk.corpus import wordnet
 
 import wordcount
+import tfidf
+import constants
 
 
 def generate_syn_set(freq_list_complete):
@@ -57,21 +59,35 @@ def generate_related_set(freq_words):
 # End of generate_related_set
 
 
-def print_syn_set(syn_set):
+def print_syn_set(syn_set, num):
     """
     Print the synset in a nicely formatted manner
     :param syn_set: The set to be printed (generated from the generate_syn_set method)
+    :param num: the number of synsets to print
     """
+    count = 0
     for w in sorted(syn_set, key=syn_set.get, reverse=True):
         if syn_set[w][0] != 0:
-            print("%15s" % w, syn_set[w])
+            print("\item %s (%d): " % (w, syn_set[w][0]), syn_set[w][1:])
+            count += 1
+        if count > num:
+            break
 # End of print_syn_set
 
 
 if __name__ == "__main__":
     args = wordcount.parse_arguments()
     records = wordcount.load_records(args.file)
+
+    scores = tfidf.tf_idf(records)
+    important_words = tfidf.extract_important_words(scores, 500)
+
     tokenized_records = wordcount.tokenize_records(records)
     frequent_words = wordcount.extract_frequent_words(tokenized_records, 500)
+
+    # Make sure that the words are important and not stop words
+    frequent_words = list(filter(lambda x: x[0] in important_words, frequent_words))
+    frequent_words = list(filter(lambda x: x[0] not in constants.MYSQL_STOPWORDS, frequent_words))
+
     synset_dict = generate_syn_set(frequent_words)
-    print_syn_set(synset_dict)
+    print_syn_set(synset_dict, 50)
