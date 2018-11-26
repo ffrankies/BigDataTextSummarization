@@ -13,3 +13,23 @@ CONTRACTIONS = ['\'s', '\'re', 'n\'t', '\'t', '\'d', '\'ve', '\'ll', '\'m\'a', '
 URL = 'URL_s'
 TIME = 'Timestamp_s'
 TEXT = 'Sentences_t'
+
+###########################
+# Month names
+###########################
+MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+MONTH_FULL_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October',
+                    'November', 'December']
+
+###########################
+# SLOT-VALUE SENTENCE OUTLINES
+###########################
+WIND_SENTENCE = 'As the storm progressed, wind speeds were seen to be ranging from as low as {0} miles per hour to ' \
+                'an astounding {1} miles per hour at the peak of the storm. Most areas that were affected by the ' \
+                'storm had winds of {2} miles per hour on average when the storm hit them.'
+RAIN_SENTENCE = 'Hurricane {0} set records with the amount of rainfall that it dropped. Some areas experienced as ' \
+                'much as {1} inches of rain, however other areas on the fringes of the storm only got {2} inches. ' \
+                'On average however, most areas affected by the storm had {3} inches of rainfall.'
+HURRICANE_SENTENCE = 'Hurricane {0} peaked as a Category {1} hurricane.'  # todo extend with more info
+LANDFALL_SENTENCE = 'Hurricane {0} made landfall as a Category {1} hurricane on {2}. The storm landed in {3} ' \
+                    'before moving towards {4}.'  # todo extend with more info
