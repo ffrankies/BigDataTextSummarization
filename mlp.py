@@ -4,9 +4,11 @@
 
 import argparse
 import random
+import json
 
 import pyspark
 from pyspark.sql import Row
+from pyspark.ml.feature import ChiSqSelector
 from pyspark.ml.linalg import Vectors
 from pyspark.ml.classification import MultilayerPerceptronClassifier
 
@@ -105,17 +107,17 @@ def extract_dataset_partitions(dataset):
     - num_features (int): The number of features
     """
     labeled_data = dataset.filter(lambda row: row['label'] == 0 or row['label'] == 1)
-
-    def split_label():
-        if random.random() < 0.7:
-            return 1
-        else:
-            return 0
-
-    labeled_data = labeled_data.map(lambda row: Row(split=split_label(), **row.asDict())).collect()
-    labeled_data = spark_context.parallelize(labeled_data)
-    train_data = labeled_data.filter(lambda row: row['split'] == 1).toDF()
-    test_data = labeled_data.filter(lambda row: row['split'] == 0).toDF()
+    train_data, test_data = labeled_data.randomSplit([0.7, 0.3])
+    # def split_label():
+    #     if random.random() < 0.7:
+    #         return 1
+    #     else:
+    #         return 0
+    # 
+    # labeled_data = labeled_data.map(lambda row: Row(split=split_label(), **row.asDict())).collect()
+    # labeled_data = spark_context.parallelize(labeled_data)
+    # train_data = labeled_data.filter(lambda row: row['split'] == 1).toDF()
+    # test_data = labeled_data.filter(lambda row: row['split'] == 0).toDF()
     num_features = len(train_data.take(1)[0]['presence_feature_set'])
     return train_data, test_data, num_features
 # End of extract_dataset_partitions()
@@ -180,6 +182,7 @@ def predict_and_separate(dataset, model):
     """
     unlabeled_data = dataset.filter(lambda row: row['label'] == -1).toDF()
     predicted = model.transform(unlabeled_data)
+    important_feature_selector(predicted)
     result = predicted.select("record", "prediction").rdd
     positive = result.filter(lambda row: row['prediction'] == 1.0).take(10)
     print("=====Positive=====")
@@ -208,6 +211,28 @@ def predict_and_separate(dataset, model):
 
     return relevant, irrelevant
 # End of predict_and_separate()
+
+
+def important_feature_selector(predicted):
+    """Uses the Chi-Squared Test to select important features for classification, and prints them out.
+    
+    Params:
+    - predicted (pyspark.sql.DataFrame): The dataset, with predictions
+    """
+    selector = ChiSqSelector(
+        numTopFeatures=50, 
+        featuresCol='presence_feature_set', 
+        labelCol='label', 
+        outputCol='selected_features', 
+        selectorType='numTopFeatures')
+    model = selector.fit(predicted)
+    important_features = model.selectedFeatures
+    with open('bag_of_words_labels.json', 'r') as bow_file:
+        bow_labels = json.loads(bow_files.readlines()[0])  # There is only one line
+    important_feature_labels = [bow_labels[index] for index in important_features]
+    print("=====Important Feature Labels=====")
+    print(important_feature_labels)
+# End of important_feature_selector()
 
 
 def examine_predictions(relevant, irrelevant):
