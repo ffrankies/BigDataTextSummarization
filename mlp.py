@@ -108,17 +108,9 @@ def extract_dataset_partitions(dataset):
     """
     labeled_data = dataset.filter(lambda row: row['label'] == 0 or row['label'] == 1)
     train_data, test_data = labeled_data.randomSplit([0.7, 0.3])
-    # def split_label():
-    #     if random.random() < 0.7:
-    #         return 1
-    #     else:
-    #         return 0
-    # 
-    # labeled_data = labeled_data.map(lambda row: Row(split=split_label(), **row.asDict())).collect()
-    # labeled_data = spark_context.parallelize(labeled_data)
-    # train_data = labeled_data.filter(lambda row: row['split'] == 1).toDF()
-    # test_data = labeled_data.filter(lambda row: row['split'] == 0).toDF()
     num_features = len(train_data.take(1)[0]['presence_feature_set'])
+    train_data = train_data.toDF()
+    test_data = test_data.toDF()
     return train_data, test_data, num_features
 # End of extract_dataset_partitions()
 
@@ -228,7 +220,7 @@ def important_feature_selector(predicted):
     model = selector.fit(predicted)
     important_features = model.selectedFeatures
     with open('bag_of_words_labels.json', 'r') as bow_file:
-        bow_labels = json.loads(bow_files.readlines()[0])  # There is only one line
+        bow_labels = json.loads(bow_file.readlines()[0])  # There is only one line
     important_feature_labels = [bow_labels[index] for index in important_features]
     print("=====Important Feature Labels=====")
     print(important_feature_labels)
@@ -288,24 +280,25 @@ def combine_sentence_output(combined_sentence_output, sentences):
     """
     if not combined_sentence_output:
         return
-    sentences_ids = sentences.rdd.map(lambda sentence: (sentence['record_id'], [sentence['Sentences_t']])).collect()
+    sentences_ids = sentences.rdd.map(
+        lambda sentence: (sentence['record_id'], [[sentence['Sentences_t']], sentence['URL_s']])).collect()
     sentences_aggregated = dict()
-    for key, contents in sentences_ids:
+    for key, contents in sentences_ids:  # Contents is a single sentence, with its article's URL
         if key in sentences_aggregated:
-            if contents[0] not in sentences_aggregated[key]:  # Prevent duplicates
+            if contents[0][0] not in sentences_aggregated[key]:  # Prevent duplicates
                 # print(contents[0], " not in ", sentences_aggregated[key])
-                sentences_aggregated[key].append(contents[0])
+                sentences_aggregated[key][0].append(contents[0][0])
         else:
             sentences_aggregated[key] = contents
     print("=====Sentences Aggregated=====")
     print(sentences_aggregated.items()[:5])
     reconstructed_records = list()
     for key, relevant_sentences in sentences_aggregated.items():
-        if len(relevant_sentences) < 5:  # Skip over reconstructed record with less than 5 sentences
+        if len(relevant_sentences[0]) < 5:  # Skip over reconstructed record with less than 5 sentences
             continue
         # reconstructed_record = list(map(lambda sentence: sentence['Sentences_t'], relevant_sentences))
-        reconstructed_record = " ".join(relevant_sentences)
-        reconstructed_record_row = Row(Sentences_t=reconstructed_record)
+        reconstructed_record = " ".join(relevant_sentences[0])
+        reconstructed_record_row = Row(Sentences_t=reconstructed_record, URL_s=relevant_sentences[1])
         reconstructed_records.append(reconstructed_record_row)
     reconstructed_records = spark_context.parallelize(reconstructed_records)
     wordcount.rdd_show(reconstructed_records, "====Reconstructed Records====")
