@@ -70,4 +70,6 @@ if __name__ == "__main__":
 
     # Count and print the occurrences
     counted_named_entities = Counter(named_entities)
-    print(counted_named_entities)
+
+    for entity in counted_named_entities.most_common(50):
+        print('\item %s : %d' % (entity[0], entity[1]))
