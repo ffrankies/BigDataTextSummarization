@@ -1,0 +1,3 @@
+[submodule "pointer-generator"]
+	path = pointer-generator
+	url = git@github.com:ffrankies/pointer-generator.git

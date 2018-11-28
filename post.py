@@ -179,6 +179,7 @@ def pos_tag_verbs(records):
 if __name__ == "__main__":
     args = wordcount.parse_arguments()
     records = wordcount.load_records(args.file) #dictionary 
+    records = records.collect()
     contents = list(map(lambda record: record[constants.TEXT], records)) #puts records into a list from dictionary
 
     pos_tagged_records = pos_parser(contents)
