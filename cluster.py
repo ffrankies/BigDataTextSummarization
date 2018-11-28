@@ -264,19 +264,24 @@ def save_clusters(clusters, args):
     """Saves the individual clusters to separate JSON files.
 
     Params:
-    - clusters (list<pyspark.rdd.RDD>): The clustered datasets.
+    - clusters (list<pyspark.sql.DataFrame>): The clustered datasets.
     - args (argparse.Namespace): The command-line arguments
     """
-    for index, cluster in enumerate(clusters):
-        # Build output filename
-        filename = "_".join([
+    cluster_samples = list()
+    for _, cluster in enumerate(clusters):
+        if cluster.count() > 0:
+            sample = cluster.rdd.takeSample(False, 1, seed=0)
+            cluster_samples.append(sample)
+    filename = "_".join([
             args.dataset, 
             str(args.num_clusters), 
             args.method, 
             args.feature_type, 
-            str(args.vocab_size)]) + "/cluster_" + str(index) + ".json"
-        cluster.coalesce(1).write.json(filename, mode='overwrite')
-        print("Saved cluster %d with %d elements" % (index, cluster.count()))
+            str(args.vocab_size)]) + "cluster_samples"
+    cluster_samples = spark_context.parallelize(cluster_samples).coalesce(1)
+    cluster_samples.toDF().coalesce(1).write.json(filename, mode='overwrite')
+    # cluster.coalesce(1).write.json(filename, mode='overwrite')
+    print("Saved cluster samples with %d elements" % cluster_samples.count())
 # End of save_clusters()
 
 
