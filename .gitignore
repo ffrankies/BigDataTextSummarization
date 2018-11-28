@@ -85,6 +85,8 @@ env.bak/
 venv.bak/
 
 # Additional stuff
-sentences/
 out.txt
-.vscode/
+*.zip
+*.out
+*/*
+*.ipynb

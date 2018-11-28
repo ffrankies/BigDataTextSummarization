@@ -26,8 +26,8 @@ def pos_parser(records):
     [[('the', POS), ('dog', POS), ('slept', POS), ('.', '.')], [('john', POS) ...('sandwich', POS)]]     
     '''
     tokenized_records = [word_tokenize(article.lower()) for article in records]
-    text = list(map(lambda record: pos_tag(record), tokenized_records)) #tags every word into pos  
-    filtered_text = wordcount.filter_stopwords(text) #filters out stopwords     
+    text = list(map(lambda record: (0, pos_tag(record)), tokenized_records)) # tags every word into pos  
+    filtered_text = [wordcount.filter_stopwords(item) for item in text] # filters out stopwords     
     return filtered_text
 
 def lemmatizer(wordlist): 
@@ -133,7 +133,7 @@ def pos_nv_tagger(pos_tagged_records):
     verbs = []
     verb_record = []
     for record in pos_tagged_records:
-        for token in record:
+        for token in record[1]:
             if token[1] in NOUNS:
                 nouns.append(token[0])
             elif token[1] in VERBS:
@@ -179,7 +179,8 @@ def pos_tag_verbs(records):
 if __name__ == "__main__":
     args = wordcount.parse_arguments()
     records = wordcount.load_records(args.file) #dictionary 
-    contents = list(map(lambda record: record[constants.TEXT], records)) #puts records into a list from dictionary
+    records = records.collect()
+    contents = list(map(lambda record: record[1][constants.TEXT], records)) #puts records into a list from dictionary
 
     pos_tagged_records = pos_parser(contents)
     nv_tuple = pos_nv_tagger(pos_tagged_records)
