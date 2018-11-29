@@ -26,10 +26,18 @@ MONTH_FULL_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'Jul
 ###########################
 WIND_SENTENCE = 'As the storm progressed, wind speeds were seen to be ranging from as low as {0} miles per hour to ' \
                 'an astounding {1} miles per hour at the peak of the storm. Most areas that were affected by the ' \
-                'storm had winds of {2} miles per hour on average when the storm hit them.'
-RAIN_SENTENCE = 'Hurricane {0} set records with the amount of rainfall that it dropped. Some areas experienced as ' \
+                'storm had winds of {2} miles per hour on average when the storm hit them. '
+RAIN_SENTENCE = 'As fair as rainfall information, some areas experienced as ' \
                 'much as {1} inches of rain, however other areas on the fringes of the storm only got {2} inches. ' \
-                'On average however, most areas affected by the storm had {3} inches of rainfall.'
-HURRICANE_SENTENCE = 'Hurricane {0} peaked as a Category {1} hurricane.'  # todo extend with more info
-LANDFALL_SENTENCE = 'Hurricane {0} made landfall as a Category {1} hurricane on {2}. The storm landed in {3} ' \
-                    'before moving towards {4}.'  # todo extend with more info
+                'On average however, most areas affected by the storm had {3} inches of rainfall. '
+HURRICANE_SENTENCE = 'Hurricane {0} was a huge storm occurring during the month of {1} which peaked as a Category {2} ' \
+                     'hurricane. '
+LANDFALL_SENTENCE = 'Hurricane {0} made landfall as a Category {1} hurricane on {2}. The storm landed in both {3} ' \
+                    'and {4}. '
+FORMATION_SENTENCE = 'The storm was first detected around {0} when it was known as Tropical Storm {1} and the storm ' \
+                     'grew in size and ferocity until it become known as a hurricane.'
+PREPARATION_SENTENCE = 'In preparation for the storm\'s approach, evacuation was determined necessary in {0}, {1}, ' \
+                       'and {2}. About {3} people were evacuated in total over this area and have moved out of the ' \
+                       'storms primary path. '
+SIZE_SENTENCE = 'During the storm\'s lifetime, it averaged a diameter of {0} miles across and at its peak reached ' \
+                'over {1} miles. '

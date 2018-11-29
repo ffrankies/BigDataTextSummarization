@@ -65,7 +65,9 @@ def extract_size_information(quantities):
         matches = re.findall('([0-9]+) miles', quantity)
         if matches:
             miles.append(int(matches[0]))
-    return numpy.mean(miles)
+
+    diameter_mean = int(numpy.mean(miles))
+    return diameter_mean, diameter_mean + int(numpy.std(miles))
 # End of extract_size_information
 
 
@@ -89,6 +91,25 @@ def extract_landfall_information(parsed):
     most_common = counted_areas.most_common(2)
     return most_common[0][0], most_common[1][0], landfall_cat, avg_date
 # End of extract_landfall_information
+
+
+def extract_storm_timeline(dates, hurricane_name):
+    """
+    Extract some information about different dates relating to the storm
+    :param dates:
+    :param hurricane_name:
+    :return: The formatted dates
+    """
+    florence_dates = list(filter(lambda sentence: hurricane_name in sentence.text, dates))
+    text_dates = eh.extract_spacy_tag(florence_dates, 'DATE')
+
+    all_dates = eh.extract_spacy_tag(dates, 'DATE')
+    middle_date = eh.get_average_month_year(all_dates)
+
+    formation_date = eh.get_lowest_date(text_dates)
+    formation_str = formation_date[1] + ' ' + str(formation_date[3]) + ', ' + str(formation_date[0])
+    return formation_str, middle_date
+# End of extract_storm_timeline
 
 
 # def extract_formation_info(parsed):
@@ -121,7 +142,7 @@ def extract_death_damages_info(quantities):
         for word in death_words:
             try:
                 number = w2n.word_to_num(word)
-                death_toll.append(number)
+                death_toll.append(int(number))
             except:
                 pass
 
@@ -131,7 +152,9 @@ def extract_death_damages_info(quantities):
     injuries_sentences = eh.filter_to_relevant_sentences(['injured', 'injuries'], quantities)
     injury_quantities = eh.extract_spacy_tag(injuries_sentences, 'QUANTITY')
 
-    return True
+    death_toll_nums = list(map(lambda str: int(str), death_toll))
+
+    return int(numpy.mean(death_toll_nums))
 # End of extract_death_info
 
 
@@ -191,7 +214,11 @@ def extract_information(preprocessed_sentences):
     hurricane_category = eh.extract_frequent_regex_match(parsed, '[Cc]ategory ([0-9]+)').most_common(1)[0][0]
 
     tropical_storm_name = eh.extract_frequent_regex_match(parsed, '[Tt]ropical [Ss]torm ([A-Z][a-z]+)').most_common(1)[0][0]
+    formation_date, middle_month = extract_storm_timeline(dates, hurricane_name)
+
     preperation_info = extract_preparation_information(parsed)
+    prep_gpes = preperation_info[0].most_common(3)
+
     restore_info = extract_restoration_information(parsed)
 
     landfall_info = extract_landfall_information(parsed)
@@ -203,12 +230,14 @@ def extract_information(preprocessed_sentences):
     # formation_info = extract_formation_info(parsed)
     death_info = extract_death_damages_info(parsed)
 
-    print(constants.HURRICANE_SENTENCE.format(hurricane_name, hurricane_category))
-    print(constants.LANDFALL_SENTENCE.format(hurricane_name, landfall_info[2], landfall_info[3], landfall_info[0],
-                                             landfall_info[1]))
+    print(constants.HURRICANE_SENTENCE.format(hurricane_name, middle_month, hurricane_category))
+    print(constants.LANDFALL_SENTENCE.format(hurricane_name, landfall_info[2], landfall_info[3], landfall_info[0],                                           landfall_info[1]))
     print(constants.WIND_SENTENCE.format(wind_info[0], wind_info[1], wind_info[2]))
     print(constants.RAIN_SENTENCE.format(hurricane_name, rain_info[1], rain_info[0], rain_info[2]))
-    # print(formation_date)
+    print(constants.FORMATION_SENTENCE.format(formation_date, tropical_storm_name))
+    print(constants.PREPARATION_SENTENCE.format(prep_gpes[0][0], prep_gpes[1][0], prep_gpes[2][0], preperation_info[1].
+                                                most_common(1)[0][0]))
+    print(constants.SIZE_SENTENCE.format(size_info[0], size_info[1]))
 # End of extract_information
 
 

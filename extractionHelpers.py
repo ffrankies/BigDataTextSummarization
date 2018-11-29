@@ -4,6 +4,7 @@ from functools import reduce
 
 import nltk
 import nltk.corpus
+import numpy
 
 import constants
 
@@ -173,6 +174,80 @@ def get_average_date(date_list):
 
     return freq_month + ' ' + counted_days.most_common(1)[0][0] + ', ' + counted_years.most_common(1)[0][0]
 # End of get_average_date
+
+
+def get_average_month_year(date_list):
+    """
+    Given a list of dates, extract the average month and year
+    :param date_list: A list of dates in varying formats
+    :return: The most frequent date
+    """
+    month_count = [0] * 12
+    month_dates = [[], [], [], [], [], [], [], [], [], [], [], []]
+
+    # Count frequency of each month, and sort dates by their month
+    for date in date_list:
+        for i in range(12):
+            if constants.MONTH_NAMES[i] in date:
+                month_count[i] += 1
+                month_dates[i].append(date)
+
+    # Find max count and get the sentences from that month
+    max_count = -1
+    most_freq_month = -1
+    for j in range(12):
+        if month_count[j] > max_count:
+            max_count = month_count[j]
+            most_freq_month = j
+    freq_month_dates = month_dates[most_freq_month]
+    freq_month = constants.MONTH_FULL_NAMES[most_freq_month]
+
+    years = []
+    for date in freq_month_dates:
+        nums = re.findall('([0-9]+)', date)
+        for num in nums:
+            if int(num) > 1900:
+                years.append(num)
+
+    counted_years = Counter(years)
+
+    return freq_month + ' ' + counted_years.most_common(1)[0][0]
+# End of get_average_date
+
+
+def get_lowest_date(date_list):
+    """
+    Given a list of dates, extract the lowest
+    :param date_list: A list of dates in varying formats
+    :return: The date
+    """
+    min_date = [9999, '', 9999, 9999]
+
+    for date in date_list:
+        nums = re.findall('([0-9]+)', date)
+        year = -1
+        month = ''
+        month_num = -1
+        day = -1
+
+        for i in range(12):
+            if constants.MONTH_NAMES[i] in date:
+                month = constants.MONTH_NAMES[i]
+                month_num = i
+                break
+
+        for num in nums:
+            if int(num) > 1900:
+                year = int(num)
+            elif int(num) <= 31:
+                day = int(num)
+
+        if year != -1 and year < min_date[0] and month_num != -1 and month_num < min_date[2] and day != 0 and \
+                day < min_date[3]:
+            min_date = [year, month, month_num, day]
+
+    return min_date
+# End of get_highest_date
 
 
 def extract_spacy_tag(sentences, tag):
