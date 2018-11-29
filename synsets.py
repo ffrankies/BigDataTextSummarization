@@ -1,8 +1,11 @@
+# coding: utf-8
 from nltk.corpus import wordnet
 
 import wordcount
 import tfidf
+
 import constants
+
 
 
 def generate_syn_set(freq_list_complete):
@@ -75,19 +78,34 @@ def print_syn_set(syn_set, num):
 # End of print_syn_set
 
 
+def add_word_counts(wordlist, word_counts):
+    """Add word counts to words in wordlist, return result as a dictionary mapping word to word count.
+
+    :param wordlist: The list of words to which word counts will be added
+    :param word_counts: The dictionary of word counts
+
+    :return: A dictionary mapping words in wordlist to their word counts
+    """
+    wordlist_with_counts = dict()
+    for word in wordlist:
+        if word in word_counts:
+            wordlist_with_counts[word] = word_counts[word]
+        else:
+            print(word, " not in word_counts dictionary but in given wordlist")
+    return wordlist_with_counts
+# End of add_word_counts()
+
+
 if __name__ == "__main__":
     args = wordcount.parse_arguments()
-    records = wordcount.load_records(args.file)
+    records = wordcount.load_records(args.file, False)
+    records = wordcount.preprocess_records(records)
+    frequent_words = wordcount.extract_frequent_words(records, args.num_words * 10, False)
+    frequent_words = dict(frequent_words)
+    tf_idf_scores = tfidf.tf_idf(records)
+    # Pyspark technically ends here - the rest is processed on master node
+    important_words = tfidf.extract_important_words(tf_idf_scores, args.num_words, True)
+    important_words_with_counts = add_word_counts(important_words, frequent_words)
+    synset_dict = generate_syn_set(important_words_with_counts.items())
+    print_syn_set(synset_dict)
 
-    scores = tfidf.tf_idf(records)
-    important_words = tfidf.extract_important_words(scores, 500)
-
-    tokenized_records = wordcount.tokenize_records(records)
-    frequent_words = wordcount.extract_frequent_words(tokenized_records, 500)
-
-    # Make sure that the words are important and not stop words
-    frequent_words = list(filter(lambda x: x[0] in important_words, frequent_words))
-    frequent_words = list(filter(lambda x: x[0] not in constants.MYSQL_STOPWORDS, frequent_words))
-
-    synset_dict = generate_syn_set(frequent_words)
-    print_syn_set(synset_dict, 50)

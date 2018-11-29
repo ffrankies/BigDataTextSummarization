@@ -26,9 +26,36 @@ def pos_parser(records):
     [[('the', POS), ('dog', POS), ('slept', POS), ('.', '.')], [('john', POS) ...('sandwich', POS)]]     
     '''
     tokenized_records = [word_tokenize(article.lower()) for article in records]
-    text = list(map(lambda record: pos_tag(record), tokenized_records)) #tags every word into pos  
-    filtered_text = wordcount.filter_stopwords(text) #filters out stopwords     
+    text = list(map(lambda record: (0, pos_tag(record)), tokenized_records)) # tags every word into pos  
+    filtered_text = [wordcount.filter_stopwords(item) for item in text] # filters out stopwords     
     return filtered_text
+
+
+def pos_nv_tagger(pos_tagged_records):
+    '''
+    Takes in parsed records by part of speech and gets the most important nouns and verbs together  
+    Params: 
+    - pos_tagged_records (list[list[tuple<str,str>]): list of list of tuples. each sublist is a article containing tuples of <word, pos>
+    Return: 
+    - nv_tuple (tuple(list[list<str>], list[list<str>)]) : a tuple containing two lists of strings. 
+    Each item in the sublist represents a record, and each item holds words in the record. 
+    First list are nouns, second list are verbs  
+    '''
+    nouns = []
+    noun_record = []
+    verbs = []
+    verb_record = []
+    for record in pos_tagged_records:
+        for token in record[1]:
+            if token[1] in NOUNS:
+                nouns.append(token[0])
+            elif token[1] in VERBS:
+                verbs.append(token[0])
+            noun_record.append(lemmatizer(nouns))    
+            verb_record.append(lemmatizer(verbs))    
+    nv_tuple = (noun_record, verb_record)
+    return nv_tuple
+
 
 def lemmatizer(wordlist): 
     '''
@@ -43,6 +70,41 @@ def lemmatizer(wordlist):
         w = LEMMATIZER.lemmatize(w)
         lemmatized_words.append(w)
     return lemmatized_words
+
+
+def pos_tfidf(word_by_record):
+    '''
+    gets the most important words via tfidf 
+    Params:
+    - word_by_record (list[list<str>]): A list containing a list of strings. Each sublist is an individual record containing tokenized words found in the record
+    Return:
+    -  important_words (list<str>): A list of important words       
+    '''
+    tfidf_scores = pos_tfidf_scores(word_by_record)
+    important_words = tfidf.extract_important_words(tfidf_scores, len(word_by_record))
+    return important_words
+
+
+def pos_tfidf_scores(wordlist):
+    '''
+    Calculates the term frequency inverse document frequency for each lemmatized non-stopword in the dataset of
+    records.
+    Params:
+    - wordlist (list[list<str>]): List of lists. Each sublist contains the tagged nouns in the record
+    Return:
+    -  tfidf_scores (list[tuple<str, double>]): list of tuples of <word, tfidf-score>.  
+    '''
+    tokenized_records = list()
+    for lemmatized_record in wordlist:
+        tokenized_records.extend(lemmatized_record)
+    tf = tfidf.term_frequency(wordcount.spark_context.parallelize(wordlist).map(lambda x: (0, x)))
+    idf = tfidf.inverse_document_frequency(wordcount.spark_context.parallelize(wordlist).map(lambda x: (0, x)))
+    tfidf_scores = list()
+    for word in tf.keys():
+        if word in idf:
+            tfidf_scores.append((word, tf[word]*idf[word]))
+    return tfidf_scores
+
 
 def noun_tagger(tagged_records): #tagged records is a list of lists 
     '''
@@ -87,63 +149,6 @@ def verb_tagger(tagged_records):
     return verb_record
 
 
-def pos_tfidf_scores(wordlist):
-    '''
-    Calculates the term frequency inverse document frequency for each lemmatized non-stopword in the dataset of
-    records.
-    Params:
-    - wordlist (list[list<str>]): List of lists. Each sublist contains the tagged nouns in the record
-    Return:
-    -  tfidf_scores (list[tuple<str, double>]): list of tuples of <word, tfidf-score>.  
-    '''
-    tokenized_records = list()
-    for lemmatized_record in wordlist:
-        tokenized_records.extend(lemmatized_record)
-    tf = tfidf.term_frequency(tokenized_records)
-    idf = tfidf.inverse_document_frequency(wordlist, tf.keys())
-    tfidf_scores = list()
-    for word in tf.keys():
-        tfidf_scores.append((word, tf[word]*idf[word]))
-    return tfidf_scores
-
-def pos_tfidf(word_by_record):
-    '''
-    gets the most important words via tfidf 
-    Params:
-    - word_by_record (list[list<str>]): A list containing a list of strings. Each sublist is an individual record containing tokenized words found in the record
-    Return:
-    -  important_words (list<str>): A list of important words       
-    '''
-    tfidf_scores = pos_tfidf_scores(word_by_record)
-    important_words = tfidf.extract_important_words(tfidf_scores, len(word_by_record))
-    return important_words
-
-def pos_nv_tagger(pos_tagged_records):
-    '''
-    Takes in parsed records by part of speech and gets the most important nouns and verbs together  
-    Params: 
-    - pos_tagged_records (list[list[tuple<str,str>]): list of list of tuples. each sublist is a article containing tuples of <word, pos>
-    Return: 
-    - nv_tuple (tuple(list[list<str>], list[list<str>)]) : a tuple containing two lists of strings. 
-    Each item in the sublist represents a record, and each item holds words in the record. 
-    First list are nouns, second list are verbs  
-    '''
-    nouns = []
-    noun_record = []
-    verbs = []
-    verb_record = []
-    for record in pos_tagged_records:
-        for token in record:
-            if token[1] in NOUNS:
-                nouns.append(token[0])
-            elif token[1] in VERBS:
-                verbs.append(token[0])
-            noun_record.append(lemmatizer(nouns))    
-            verb_record.append(lemmatizer(verbs))    
-    nv_tuple = (noun_record, verb_record)
-    return nv_tuple
-
-
 def pos_tag_nouns(records):
     '''
     pos tags nouns and gets most important ones 
@@ -179,7 +184,8 @@ def pos_tag_verbs(records):
 if __name__ == "__main__":
     args = wordcount.parse_arguments()
     records = wordcount.load_records(args.file) #dictionary 
-    contents = list(map(lambda record: record[constants.TEXT], records)) #puts records into a list from dictionary
+    records = records.collect()
+    contents = list(map(lambda record: record[1][constants.TEXT], records)) #puts records into a list from dictionary
 
     pos_tagged_records = pos_parser(contents)
     nv_tuple = pos_nv_tagger(pos_tagged_records)

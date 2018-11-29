@@ -1,24 +1,30 @@
+# coding: utf-8
 """Using word frequencies to create a summary.
 """
+# from sparknlp.base import *
 
 import argparse
-import json
 import string
-import random
 import pprint
+from operator import add
 
-from nltk import pos_tag
-from nltk.collocations import BigramAssocMeasures
-from nltk.collocations import BigramCollocationFinder 
+import pyspark
+from pyspark.sql import Row
+import pyspark.sql.functions as F
+
+spark_context = pyspark.SparkContext.getOrCreate()
+spark_context.setLogLevel("OFF")
+sql_context = pyspark.SQLContext(spark_context)
+
 from nltk.corpus import wordnet
-from nltk.tokenize import word_tokenize
-from nltk.corpus import stopwords
-from nltk.corpus import words as nltk_words
-from nltk.stem import WordNetLemmatizer
-from nltk.probability import FreqDist
 
 import constants
 
+###########################
+# Set up nltk
+###########################
+from nltk import pos_tag
+from nltk.stem import WordNetLemmatizer
 
 ###########################
 # PART OF SPEECH TAG TRANSLATOR FROM `pos_tag` TAGS to `wordnet` TAGS
@@ -62,8 +68,25 @@ POS_TRANSLATOR = {
     'WDT': DEFAULT_TAG,    # wh-determiner   which
     'WP': DEFAULT_TAG,     # wh-pronoun   who, what
     'WP$': DEFAULT_TAG,    # possessive wh-pronoun   whose
-    'WRB': wordnet.ADV     # wh-abverb  where, when
+    'WRB': wordnet.ADV     # wh-adverb  where, when
 }
+
+TEXT_FIELD = constants.TEXT
+CONTRACTIONS = constants.CONTRACTIONS
+MYSQL_STOPWORDS = constants.MYSQL_STOPWORDS
+
+
+def rdd_show(rdd, heading="=====RDD====="):
+    """data_frame.show() for an RDD
+
+    Params:
+    - rdd (pyspark.rdd.RDD): The RDD whose contents to show
+    - heading (str): The heading to print above the rdd
+    """
+    print(heading)
+    for row in rdd.take(5):
+        print(row)
+# End of show()
 
 
 def parse_arguments():
@@ -90,173 +113,211 @@ def load_records(file, preview_records=False):
     - file (str): The path to the JSON file
 
     Returns:
-    - records (list<dict>): The contents of the JSON file
+    - records (pyspark.rdd.RDD): The contents of the JSON file
     """
-    with open(file, 'r') as json_file:
-        records = json_file.readlines()
-    records = [json.loads(record) for record in records]
-    records = list(filter(lambda record: record[constants.TEXT] != '', records))
-    if preview_records:
-        print("=====Random Sample of Records=====")
-        pprint.pprint(random.choices(records, k=10))
+    data_frame = sql_context.read.json(file)
+    data_frame.show(n=5, truncate=100)
+    # Filter out records shorter than 100 characters. Then,
+    # add a unique ID to each record. Then,
+    # make the ID the first element in the record, so it can be used as a key
+    records = data_frame.filter(F.length(F.col(TEXT_FIELD)) > 99).rdd\
+        .zipWithUniqueId()\
+        .map(lambda record: (record[1], record[0]))
+    rdd_show(records, "=====Loaded Records=====")
     return records
 # End of load_records()
 
 
-def tokenize_records(records):
-    """Tokenizes the records into word lists. Filters out any stopwords in the list.
+def preprocess_records(records):
+    """Preprocesses the records into lemma lists. Filters out any stopwords or non-dictionary words in the list.
 
     Params:
-    - records (list<dict>): The non-empty records from the JSON file
+    - records (pyspark.rdd.RDD): The non-empty records from the JSON file
 
     Returns:
-    - tokenized_records (list<list<str>>): The tokenized text content of the records
+    - records_lemmatized (pyspark.rdd.RDD): The tokenized text content of the records
     """
-    contents = map(lambda record: record[constants.TEXT], records)
-    tokenized_records = [word_tokenize(record.lower()) for record in contents]
-    lemmatized_records = lemmatize_words(tokenized_records)
-    lemmatized_words = list()
-    for lemmatized_record in lemmatized_records:
-        lemmatized_words.extend(lemmatized_record)
-    return lemmatized_words
+    lemmatizer = WordNetLemmatizer()
+
+    records_tokenized = records.map(tokenize_record)
+    records_tagged = records_tokenized.map(lambda record: (record[constants.KEY], pos_tag(record[constants.VALUE])))
+    records_filtered = records_tagged.map(filter_stopwords)
+    records_lemmatized = records_filtered.map(lambda record: lemmatize_record(record, lemmatizer))
+    rdd_show(records_lemmatized, "=====Preprocessed Records=====")
+
+    return records_lemmatized
 # End of tokenize_records()
 
 
-def lemmatize_words(records):
-    """Lemmatizes the words in the tokenized sentences.
-
-    Lemmatization works best when the words are tagged with their corresponding part of speech, so the words are first
-    tagged using nltk's `pos_tag` function.
-
-    NB: There is a good chance that this tagging isn't 100% accurate. For that matter, lemmatization isn't always 100%
-    accurate.
+def tokenize_record(record):
+    """Tokenizes a single record (row) in the RDD.
 
     Params:
-    - records (list<list<str>>): The word-tokenized records
+    - record (tuple<int, dict>): The record to be tokenized, as a key-value pair
 
     Returns:
-    - lemmatized_records (list<str>)): The lemmatized words from all the records
+    - key (int): The ID of the record
+    - tokenized (list<str>): The list of tokens present in the record
     """
-    print('Length of tagged_records: {:d}'.format(len(records)))
-    print('Total number of words: {:d}'.format(sum([len(record) for record in records])))
-    tagged_records = map(lambda record: pos_tag(record), records)
-    tagged_records = filter_stopwords(tagged_records)
-    lemmatizer = WordNetLemmatizer()
-    lemmatized_records = list()
-    for record in tagged_records:
-        try:
-            lemmatized_record = list(map(lambda word: lemmatizer.lemmatize(word[0], POS_TRANSLATOR[word[1]]), record))
-        except Exception as err:
-            print(record)
-            raise err
-        lemmatized_records.append(lemmatized_record)
-    print('Total number of words after filtering: {:d}'.format(len(lemmatized_records)))
-    return lemmatized_records
-# End of lemmatize_words()
+    import nltk
+
+    key, record_contents = record
+    lowercase = record_contents[TEXT_FIELD].encode('utf-8').lower()
+    tokenized = nltk.word_tokenize(lowercase)
+    return (key, tokenized)
+# End of tokenize_record()
 
 
-def filter_stopwords(tagged_records):
+def filter_stopwords(tagged_record):
     """Filters stopwords, punctuation, and contractions from the tagged records. This is done after tagging to make
     sure that the tagging is as accurate as possible.
 
     Params:
-    - tagged_records (list<list<tuple<str, str>>>): The records, with each word tagged with its part of speech
+    - tagged_record (tuple<int, list>): The record, with each word tagged with its part of speech
 
     Returns:
-    - filtered_records (list<list<tuple<str, str>>>): The records, with unimportant words filtered out
+    - key (int): The ID of the record
+    - filtered_record (list<tuple<str, str>>): The POS-tagged record tokens, with stopword tokens filtered out
     """
-    print('Filtering stopwords')
+    from nltk.corpus import stopwords
+    from nltk.corpus import words as nltk_words
+
+    key, record = tagged_record
     stop_words = list(stopwords.words('english'))
     stop_words.extend(string.punctuation)
-    stop_words.extend(constants.CONTRACTIONS)
-    stop_words.extend(constants.MYSQL_STOPWORDS)
+    stop_words.extend(CONTRACTIONS)
+    stop_words.extend(MYSQL_STOPWORDS)
     dictionary_words = set(nltk_words.words())
 
-    def not_dictionary_word(word): 
-        return word[0] not in dictionary_words and word[1] not in ['NNP', 'NNPS']
+    def noun_or_dictionary_word(word):
+        return word[0] in dictionary_words or word[1] in ['NNP', 'NNPS']
 
-    filtered_records = [filter(lambda word: word[0] not in stop_words, record) for record in tagged_records]
-    filtered_records = [filter(lambda word: not_dictionary_word, record) for record in filtered_records]
-    filtered_records = [filter(lambda word: not word[0].replace('.', '', 1).isdigit(), record)
-                        for record in filtered_records]  # see https://stackoverflow.com/a/23639915/5760608
-    filtered_records = [list(filter(lambda word: word[1] in POS_TRANSLATOR.keys(), record))
-                        for record in filtered_records]
-    return filtered_records
+    filtered_record = filter(lambda word: word[0] not in stop_words, record)
+    filtered_record = filter(noun_or_dictionary_word, filtered_record)
+    filtered_record = filter(lambda word: not word[0].replace('.', '', 1).isdigit(), filtered_record)
+    filtered_record = filter(lambda word: word[1] in POS_TRANSLATOR.keys(), filtered_record)
+    return (key, list(filtered_record))
 # End of filter_stopwords()
+
+
+def lemmatize_record(tagged_record, lemma_model):
+    """Lemmatizes the words in the given record, provided they're tagged with their correct part of speech. The part
+    of speech tagged is stripped away from the words.
+
+    Params:
+    - tagged_record (tuple<int, list>): The record, as a list of tokens with their part of speech tag
+    - lemma_model (wordnet.Lemmatizer): The lemmatizer model
+
+    Returns:
+    - id (int): The ID of the record
+    - record_lemmatized (list<str>): The lemmas for each word in the record.
+    """
+    key, record = tagged_record
+    record_lemmatized = [lemma_model.lemmatize(word[0], POS_TRANSLATOR[word[1]]).encode('utf-8')
+                         for word in record]
+    return (key, record_lemmatized)
+# End of lemmatize_record()
 
 
 def extract_frequent_words(records, num_words, no_counts=False):
     """Stems the words in the given records, and then counts the words using NLTK FreqDist.
 
-    Stemming is done using the English Snowball stemmer as per the recommendation from 
+    Stemming is done using the English Snowball stemmer as per the recommendation from
     http://www.nltk.org/howto/stem.html
 
     NB: There is also a Lancaster stemmer available, but it is apparently very aggressive and can lead to a loss of
     potentially useful words (source: https://stackoverflow.com/a/11210358/5760608)
 
     Params:
-    - records (list<str>): The tokenized records from the JSON file
+    - records (pyspark.rdd.RDD): The tokenized records from the JSON file
     - num_words (int): The number of words to extract
     - no_counts (bool): If True, frequent words will not include the word counts
 
     Returns:
     - frequent_words (list<str> or list<tuple<str, int>>): The list of most frequent words
     """
-    word_counts = FreqDist(records)
-    frequent_words = word_counts.most_common(num_words)
+    # @see https://github.com/apache/spark/blob/master/examples/src/main/python/wordcount.py
+    word_counts = records.flatMap(lambda record: record[constants.VALUE])\
+        .map(lambda word: (word, 1))\
+        .reduceByKey(add)\
+        .sortBy(lambda word_with_count: word_with_count[1], ascending=False)
+    rdd_show(word_counts, "=====Word Counts=====")
+
+    frequent_words = word_counts.take(num_words)
     if no_counts:
         frequent_words = [word[0] for word in frequent_words]
-    print("=====The {:d} Most Frequent Words=====".format(num_words))
-    print(frequent_words)
     return frequent_words
 # End of extract_frequent_words()
 
 
-def extract_collocations(records, num_collocations, collocation_window, compare_collocations = False):
+def extract_collocations(records, num_collocations, collocation_window):
     """Extracts the most common collocations present in the records.
 
     Params:
-    - records (list<list<str>>): The tokenized and lemmatized records from the JSON file
+    - records (pyspark.rdd.RDD): The tokenized and lemmatized records from the JSON file
     - num_collocations (int): The number of collocations to show
-    - collocation_window (int): The text window within which to search for collocations
+    - collocation_window (int): The text window within which to search for collocations.
 
     Returns:
-    - best_collocations (list<tuple<str>>): The highest scored collocations present in the records
+    - best_collocations (list<tuple<str, int>>): The highest scored collocations present in the records, with their
+                                                 frequency of occurrence in the dataset.
     """
-    bigram_measures = BigramAssocMeasures()
-    bigram_finder = BigramCollocationFinder.from_words(records, window_size=collocation_window)
-    bigram_finder.apply_freq_filter(min_freq=3)
-    best_collocations = bigram_finder.nbest(bigram_measures.raw_freq, num_collocations)
-    print("=====The {:d} Most Frequent Collocations=====".format(num_collocations))
-    pprint.pprint(best_collocations)
-    if compare_collocations:
-        print("=====The {:d} Best Collocations (Pointwise Mutual Information)=====".format(num_collocations))
-        pprint.pprint(bigram_finder.nbest(bigram_measures.pmi, num_collocations))
-        print("=====The {:d} Best Collocations (Student's t test)=====".format(num_collocations))
-        pprint.pprint(bigram_finder.nbest(bigram_measures.student_t, num_collocations))
-        print("=====The {:d} Best Collocations (Chi-square test)=====".format(num_collocations))
-        pprint.pprint(bigram_finder.nbest(bigram_measures.chi_sq, num_collocations))
-        print("=====The {:d} Best Collocations (Mutual Information)=====".format(num_collocations))
-        pprint.pprint(bigram_finder.nbest(bigram_measures.mi_like, num_collocations))
-        print("=====The {:d} Best Collocations (Likelihood Ratios)=====".format(num_collocations))
-        pprint.pprint(bigram_finder.nbest(bigram_measures.likelihood_ratio, num_collocations))
-        print("=====The {:d} Best Collocations (Poisson Stirling)=====".format(num_collocations))
-        pprint.pprint(bigram_finder.nbest(bigram_measures.poisson_stirling, num_collocations))
-        print("=====The {:d} Best Collocations (Jaccard Index)=====".format(num_collocations))
-        pprint.pprint(bigram_finder.nbest(bigram_measures.jaccard, num_collocations))
-        print("=====The {:d} Best Collocations (Phi-square test)=====".format(num_collocations))
-        pprint.pprint(bigram_finder.nbest(bigram_measures.phi_sq, num_collocations))
-        print("=====The {:d} Best Collocations (Fisher's Exact Test)=====".format(num_collocations))
-        pprint.pprint(bigram_finder.nbest(bigram_measures.fisher, num_collocations))
-        print("=====The {:d} Best Collocations (Dice's Coefficient)=====".format(num_collocations))
-        pprint.pprint(bigram_finder.nbest(bigram_measures.dice, num_collocations))
-    return best_collocations
+    # @see: https://spark.apache.org/docs/2.2.0/ml-features.html#n-gram
+    from pyspark.ml.feature import NGram
+
+    data_frame = records.map(lambda record: Row(record[constants.VALUE])).toDF(['words'])
+    ngram_model = NGram(n=2, inputCol='words', outputCol='ngrams')
+    ngram_data_frame = ngram_model.transform(data_frame)
+
+    ngram_rdd = ngram_data_frame.select('ngrams').rdd
+    ngram_rdd = ngram_rdd.flatMap(lambda row: row['ngrams'])\
+        .map(lambda ngram: (ngram.encode('utf-8'), 1))\
+        .reduceByKey(add)\
+        .sortBy(lambda bigram_with_count: bigram_with_count[1], ascending=False)
+    rdd_show(ngram_rdd)
+
+    frequent_collocations = ngram_rdd.take(num_collocations)
+
+    return frequent_collocations
 # End of extract_collocations()
+
+
+def merge_collocations_with_wordlist(collocations, wordlist):
+    """Filters collocations to only return those where both words are in the wordlist. Then returns the collocations
+    and the words from the wordlist that aren't in any collocations.
+
+    Params:
+    - collocations (list<tuple<str, int>>): The collocations to merge with the word list, with their counts
+    - wordlist (list<str, int>): The words to filter by, with their counts
+
+    Returns:
+    - merged_list (list<str>): List of words and collocations
+    """
+    words = [word[0] for word in wordlist]
+    word_pairs = [collocation[0] for collocation in collocations]
+    unused_words = set(words)
+    merged_list = list()
+    for collocation in word_pairs:  # collocations look like: "one two"
+        word_one, word_two = collocation.split(" ")
+        if word_one != word_two and word_one in unused_words and word_two in unused_words:
+            merged_list.append(collocation)
+            unused_words -= set([word_one, word_two])
+    merged_list.extend(unused_words)
+    return merged_list
+# End of merge_collocations_with_wordlist()
 
 
 if __name__ == "__main__":
     args = parse_arguments()
-    records = load_records(args.file, False)
-    tokenized_records = tokenize_records(records)
-    extract_frequent_words(tokenized_records, args.num_words, True)
-    extract_collocations(tokenized_records, args.num_collocations, args.collocation_window, False)
+    records = load_records(args.file)
+    records_lemmatized = preprocess_records(records)
+    frequent_words = extract_frequent_words(records_lemmatized, args.num_words, False)
+    print("=====The {:d} Most Frequent Words=====".format(args.num_words))
+    print(frequent_words)
+    frequent_collocations = extract_collocations(records_lemmatized, args.num_collocations, args.collocation_window)
+    print("=====The {:d} Most Frequent Collocations=====".format(args.num_collocations))
+    pprint.pprint(frequent_collocations)
+    # Strip counts
+    words_and_collocations = merge_collocations_with_wordlist(frequent_collocations, frequent_words)
+    print("=====Most Frequent Words And Collocations=====")
+    print(words_and_collocations)

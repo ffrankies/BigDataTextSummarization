@@ -1,3 +1,4 @@
+# coding: utf-8
 ###########################
 # ADDITIONAL STOP WORDS
 ###########################
@@ -41,3 +42,8 @@ PREPARATION_SENTENCE = 'In preparation for the storm\'s approach, evacuation was
                        'storms primary path. '
 SIZE_SENTENCE = 'During the storm\'s lifetime, it averaged a diameter of {0} miles across and at its peak reached ' \
                 'over {1} miles. '
+
+# RDD RECORD FIELDS
+###########################
+KEY = 0
+VALUE = 1
