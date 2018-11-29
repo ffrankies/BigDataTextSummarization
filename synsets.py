@@ -4,6 +4,9 @@ from nltk.corpus import wordnet
 import wordcount
 import tfidf
 
+import constants
+
+
 
 def generate_syn_set(freq_list_complete):
     """
@@ -59,14 +62,19 @@ def generate_related_set(freq_words):
 # End of generate_related_set
 
 
-def print_syn_set(syn_set):
+def print_syn_set(syn_set, num):
     """
     Print the synset in a nicely formatted manner
     :param syn_set: The set to be printed (generated from the generate_syn_set method)
+    :param num: the number of synsets to print
     """
+    count = 0
     for w in sorted(syn_set, key=syn_set.get, reverse=True):
         if syn_set[w][0] != 0:
-            print("%15s" % w, syn_set[w])
+            print("\item %s (%d): " % (w, syn_set[w][0]), syn_set[w][1:])
+            count += 1
+        if count > num:
+            break
 # End of print_syn_set
 
 
@@ -100,3 +108,4 @@ if __name__ == "__main__":
     important_words_with_counts = add_word_counts(important_words, frequent_words)
     synset_dict = generate_syn_set(important_words_with_counts.items())
     print_syn_set(synset_dict)
+
