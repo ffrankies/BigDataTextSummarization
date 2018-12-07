@@ -183,7 +183,7 @@ def mark_irrelevant_sentence(sentence):
     """
     print("Marking irrelevant sentence")
     FILTER_FROM = ['picture', 'all rights reserved', 'http', 'tap here', 'pictured', 'photo', 'gallery', 'galleries',
-                   'share', 'facebook', '.com']
+                   'share', 'facebook', '.com', 'video']
     sentence_dictionary = sentence.asDict()
     for filter_token in FILTER_FROM:
         sentences = sentence_dictionary['Sentences_t'].lower()
