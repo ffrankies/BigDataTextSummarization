@@ -6,6 +6,7 @@ import argparse
 
 import pyspark
 from pyspark.sql import Row
+from pyspark.ml.linalg import Vectors
 from pyspark.ml.feature import CountVectorizer, HashingTF, IDF, Tokenizer
 from pyspark.ml.clustering import KMeans, LDA, BisectingKMeans
 from pyspark.ml.classification import MultilayerPerceptronClassifier
@@ -171,6 +172,12 @@ def kmeans(features, num_clusters):
     kmeans_model = kmeans.fit(features)
     clustered = kmeans_model.transform(features)
     clustered.show()
+    cluster_centers = kmeans_model.clusterCenters()
+    clustered = clustered.rdd.map(
+        lambda row: Row(distance=Vectors.squared_distance(cluster_centers[row['cluster']], row['features']), 
+                        **row.asDict())
+    ).toDF()
+    clustered.show()
     print("=====Clustering Results=====")
     print("Clustering cost = ", kmeans_model.computeCost(features))
     print("Cluster sizes = ", kmeans_model.summary.clusterSizes)
@@ -212,7 +219,8 @@ def lda(features, num_clusters):
     lda = LDA(k=num_clusters, featuresCol='features', topicDistributionCol='topics')
     lda_model = lda.fit(features)
     clustered = lda_model.transform(features)
-    clustered = clustered.rdd.map(lambda row: Row(cluster=int(argmax(row['topics'])), **row.asDict())).toDF()
+    clustered = clustered.rdd.map(lambda row: Row(cluster=int(argmax(row['topics'])), **row.asDict()))
+    clustered = clustered.map(lambda row: Row(closeness=float(row['topics'][row['cluster']]), **row.asDict())).toDF()
     clustered = clustered.drop('topics')
     clustered.show()
     print("=====Clustering Results=====")
@@ -270,7 +278,10 @@ def save_clusters(clusters, args):
     cluster_samples = list()
     for _, cluster in enumerate(clusters):
         if cluster.count() > 0:
-            sample = cluster.rdd.takeSample(False, 1, seed=0)
+            if args.method == METHOD_LDA:
+                sample = cluster.rdd.max(lambda record: record['closeness'])
+            elif args.method == METHOD_KMEANS:
+                sample = cluster.rdd.min(lambda record: record['distance'])
             cluster_samples.append(sample)
     filename = "_".join([
             args.dataset, 
