@@ -22,6 +22,8 @@ def parse_arguments():
                         help='The threshold below which record is irrelevant')
     parser.add_argument('-r', '--relevant_t', type=float, default=2.0,
                         help='Record is relevant if feature count > mean + relevant_t * s.d.')
+    parser.add_argument('-s', '--contains_sentences', action='store_true',
+                        help='Add this argument if the dataset consists of sentences and not records.')
     return parser.parse_args()
 # End of parse_arguments()
 
@@ -94,13 +96,9 @@ def automatically_label_dataset(feature_count_dataset_rdd, feature_count_mean, f
     """
     irrelevant_threshold = irrelevant_t
     relevant_threshold = feature_count_mean + (relevant_t * feature_count_sd)
+    print("Relevant threshold = %.2f | Relevant threshold = %.2f" % (relevant_threshold, irrelevant_threshold))
     autolabeled_dataset = feature_count_dataset_rdd\
         .map(lambda row: automatically_label_record(row, irrelevant_threshold, relevant_threshold))
-    num_positive = autolabeled_dataset.filter(lambda record: record['label'] == 1.0).count()
-    num_negative = autolabeled_dataset.filter(lambda record: record['label'] == 0.0).count()
-    print("====Autolabeled Statistics====")
-    print("Number of positive records | number of negative records | total records = ", num_positive, " | ", 
-          num_negative, " | ", autolabeled_dataset.count())
     return autolabeled_dataset
 # End of automatically_label_dataset()
 
@@ -133,6 +131,88 @@ def automatically_label_record(record_row, irrelevant_threshold, relevant_thresh
 # End of automatically_label_record()
 
 
+def augment_automatic_labels(dataset, contains_sentences):
+    """Augment automatic labeling with some rules.
+
+    For labeling records, any record that does not contain the bigram "Hurricane Florence" is labeled as irrelevant.
+
+    For labeling sentences, any sentence containing any of the ff words/bigrams was labeled as irrelevant: 
+    "picture", "all rights reserved", "http", "tap here", "pictured".
+
+    Params:
+    - dataset (pyspark.rdd.RDD): The automatically labeled dataset
+    - contains_sentences (bool): If True, dataset contains sentences. Otherwise, it contains records
+
+    Returns:
+    - augmented_autolabeled_dataset (pyspark.rdd.RDD): The automatically labeled dataset, with augmented labels
+    """
+    if contains_sentences:
+        augmented_autolabeled_dataset = dataset.map(mark_irrelevant_sentence)
+    else:  # contains records
+        augmented_autolabeled_dataset = dataset.map(mark_irrelevant_record)
+    return augmented_autolabeled_dataset
+# End of augment_automatic_labels()
+
+
+def mark_irrelevant_record(record):
+    """Marks a record as irrelevant if it does not contain the bigram "Hurricane Florence"
+    
+    Params:
+    - record (pyspark.sql.Row): The record to mark as irrelevant
+
+    Returns:
+    - marked_record (pyspark.sql.Row): The marked record
+    """
+    record_dictionary = record.asDict()
+    if 'hurricane florence' not in record_dictionary['Sentences_t'].lower():
+        record_dictionary['label'] = 0.0
+        print("Augmented a record label")
+    return Row(**record_dictionary)
+# End of mark_irrelevant_record()
+
+
+def mark_irrelevant_sentence(sentence):
+    """Marks a sentence as irrelevant if it contains any of the following words or bigrams: 
+    "picture", "all rights reserved", "http", "tap here", "pictured".
+    
+    Params:
+    - sentence (pyspark.sql.Row): The sentence to mark as irrelevant
+
+    Returns:
+    - marked_sentence (pyspark.sql.Row): The marked sentence
+    """
+    print("Marking irrelevant sentence")
+    FILTER_FROM = ['picture', 'all rights reserved', 'http', 'tap here', 'pictured', 'photo', 'gallery', 'galleries',
+                   'share', 'facebook', '.com', 'video']
+    sentence_dictionary = sentence.asDict()
+    for filter_token in FILTER_FROM:
+        sentences = sentence_dictionary['Sentences_t'].lower()
+        if filter_token in sentences:
+            print("Sentence is irrelevant")
+            sentence_dictionary['label'] = 0.0
+            break
+        if len(sentences) < 20 or len(sentences) > 400:
+            print("Sentence is irrelevant")
+            sentence_dictionary['label'] = 0.0
+            break
+    return Row(filtered=True, **sentence_dictionary)
+# End of mark_irrelevant_sentence()
+
+
+def autolabeled_statistics(autolabeled_dataset):
+    """Prints the autolabeling statistics.
+
+    Params:
+    - autolabeled_dataset (pyspark.rdd.RDD): The automatically labeled dataset
+    """
+    num_positive = autolabeled_dataset.filter(lambda record: record['label'] == 1.0).count()
+    num_negative = autolabeled_dataset.filter(lambda record: record['label'] == 0.0).count()
+    print("====Autolabeled Statistics====")
+    print("Number of positive records | number of negative records | total records = ", num_positive, " | ", 
+          num_negative, " | ", autolabeled_dataset.count())
+# End of autolabeled_statistics()
+
+
 def save_autolabeled_dataset(autolabeled_dataset, output_filename):
     """Save the autolabeled dataset as a series of JSON files. First converts the RDD to a dataframe, because most
     pyspark Machine Learning approaches seem to use data frames (and also data frames are easier to save).
@@ -156,4 +236,7 @@ if __name__ == "__main__":
     feature_count_mean, feature_count_sd = get_feature_counts_statistics(dataset)
     dataset = automatically_label_dataset(dataset, feature_count_mean, feature_count_sd,
                                           args.irrelevant_t, args.relevant_t)
+    autolabeled_statistics(dataset)
+    dataset = augment_automatic_labels(dataset, args.contains_sentences)
+    autolabeled_statistics(dataset)
     save_autolabeled_dataset(dataset, args.output)

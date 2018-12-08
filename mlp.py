@@ -5,6 +5,7 @@
 import argparse
 import random
 import json
+import math
 
 import pyspark
 from pyspark.sql import Row
@@ -106,13 +107,49 @@ def extract_dataset_partitions(dataset):
     - test (pyspark.rdd.RDD): The testing partition
     - num_features (int): The number of features
     """
-    labeled_data = dataset.filter(lambda row: row['label'] == 0 or row['label'] == 1)
+    labeled_data = dataset.filter(lambda row: row['label'] == 0.0 or row['label'] == 1.0)
     train_data, test_data = labeled_data.randomSplit([0.7, 0.3])
+    train_data, test_data = undersample(train_data, test_data)
     num_features = len(train_data.take(1)[0]['presence_feature_set'])
     train_data = train_data.toDF()
     test_data = test_data.toDF()
     return train_data, test_data, num_features
 # End of extract_dataset_partitions()
+
+
+def undersample(train_data, test_data):
+    """Performs undersampling to account for the discrepancy b/n numbers of positive and negative training samples.
+
+    Params:
+    - train_data (pyspark.rdd.RDD): The training data
+    - test_data (pyspark.rdd.RDD): The testing data
+
+    Returns:
+    - train_data (pyspark.rdd.RDD): The training data
+    - test_data (pyspark.rdd.RDD): The testing data
+    """
+    print("Before undersampling, num train samples = %d, num test samples = %d" % 
+          (train_data.count(), test_data.count()))
+    positive_training_samples = train_data.filter(lambda row: row['label'] == 1.0)
+    negative_training_samples = train_data.filter(lambda row: row['label'] == 0.0)
+    num_positive_training_samples = positive_training_samples.count()
+    num_negative_training_samples = negative_training_samples.count()
+    if num_negative_training_samples == num_positive_training_samples:
+        return train_data, test_data
+    minimum = min([num_negative_training_samples, num_positive_training_samples])
+    maximum = max([num_negative_training_samples, num_positive_training_samples])
+    ratio_one = float(minimum) / float(maximum)
+    ratio_two = 1.0 - ratio_one
+    if positive_training_samples.count() > negative_training_samples.count():
+        positive_training_samples, test_additions = positive_training_samples.randomSplit([ratio_one, ratio_two])
+    else:
+        negative_training_samples, test_additions = negative_training_samples.randomSplit([ratio_one, ratio_two])
+    test_data = test_data.union(test_additions)
+    train_data = positive_training_samples.union(negative_training_samples)
+    print("After undersampling, num train samples = %d, num test samples = %d" % 
+          (train_data.count(), test_data.count()))
+    return train_data, test_data
+# End of undersample()
 
 
 def train_model(train_data, num_features):
@@ -280,8 +317,14 @@ def combine_sentence_output(combined_sentence_output, sentences):
     """
     if not combined_sentence_output:
         return
-    sentences_ids = sentences.rdd.map(
-        lambda sentence: (sentence['record_id'], [[sentence['Sentences_t']], sentence['URL_s']])).collect()
+    if 'URL_s' in sentences.columns:
+        sentences_ids = sentences.rdd.map(
+            lambda sentence: (sentence['record_id'], [[sentence['Sentences_t']], sentence['URL_s']])
+        ).collect()
+    else:
+        sentences_ids = sentences.rdd.map(
+            lambda sentence: (sentence['record_id'], [[sentence['Sentences_t']]])
+        ).collect()
     sentences_aggregated = dict()
     for key, contents in sentences_ids:  # Contents is a single sentence, with its article's URL
         if key in sentences_aggregated:
@@ -298,10 +341,14 @@ def combine_sentence_output(combined_sentence_output, sentences):
             continue
         # reconstructed_record = list(map(lambda sentence: sentence['Sentences_t'], relevant_sentences))
         reconstructed_record = " ".join(relevant_sentences[0])
-        reconstructed_record_row = Row(Sentences_t=reconstructed_record, URL_s=relevant_sentences[1])
+        if 'URL_s' in sentences.columns:
+            reconstructed_record_row = Row(Sentences_t=reconstructed_record, URL_s=relevant_sentences[1])
+        else:
+            reconstructed_record_row = Row(Sentences_t=reconstructed_record)
         reconstructed_records.append(reconstructed_record_row)
     reconstructed_records = spark_context.parallelize(reconstructed_records)
     wordcount.rdd_show(reconstructed_records, "====Reconstructed Records====")
+    print("Number of reconstructed records = %d" % reconstructed_records.count())
     reconstructed_records.toDF().write.json(combined_sentence_output, "overwrite")
 # End of combine_sentence_output()
 
