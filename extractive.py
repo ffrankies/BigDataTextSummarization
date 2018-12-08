@@ -1,59 +1,74 @@
-from pyteaser import SummarizeUrl, Summarize
+"""Uses Pyteaser to create an extractive summary
+"""
 import json
 import os
 import re
+import argparse
 
-stripe_dir = "../Hurricane_Florence_small"
-files_in_dir = [entry for entry in os.listdir(stripe_dir)  if os.path.isfile(os.path.join(stripe_dir, entry))]
-files_in_dir = [os.path.join(stripe_dir, entry) for entry in files_in_dir]
-json_files = [entry for entry in files_in_dir if re.match(r'part-.*\.json', os.path.basename(entry))]
+from pyteaser import SummarizeUrl, Summarize
 
-total_summaries = []
 
-# Summarizing from URL 
-for current_file in json_files:
-	with open(current_file, 'r') as json_file:
-		lines = json_file.readlines()
-		json_objects = [json.loads(line) for line in lines]
-		for dictionary in json_objects:
-			url = dictionary['URL_s']
-			summary_sentences = SummarizeUrl(url)
-			if summary_sentences:  # If list is not empty or None
-				total_summaries.append(" ".join(summary_sentences))
-				#print(summary_sentences)
+def parse_arguments():
+    """Parses command-line arguments.
 
-total_summaries1 = [" ".join(total_summaries[i:i+20]) for i in range(0,len(total_summaries),20)]
-total_summaries2 = []
-for x in range(0, len((total_summaries1))):
-	current_summary = total_summaries1[x]
-	current_summary = Summarize("Hurricane Florence",current_summary)
-	total_summaries2.append(current_summary)
+    Returns:
+    - args (argparse.Namespace): The parsed arguments
+    """
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-d', '--dataset', type=str, help='The path to the directory containing the dataset')
+    return parser.parse_args()
+# End of parse_arguments()
 
-print("Printing total summaries 2")
-print(total_summaries2)
 
-#final_summary = [" ".join(total_summaries2[i:i+20]) for i in range(0,len(total_summaries2),20)]
-final_summary = ""
-total_summaries3 = []
-for y in range(0,len(total_summaries2)):
-	#final_summary.append(total_summaries2[y][0])
-	#final_summary = final_summary+" "+total_summaries2[y][0]
-	total_summaries3.append(total_summaries2[y][0])
+def get_json_files(directory):
+    """Extracts all the JSON files from a directory.
 
-total_summaries4 = []
+    Params:
+    - directory (str): The directory containing JSON files
 
-for x in range(0, len((total_summaries3))):
-	current_summary = total_summaries3[x]
-	current_summary = Summarize("Hurricane Florence",current_summary)
-	total_summaries4.append(current_summary)
+    Returns:
+    - json_files (list<str>): The list of paths to the JSON files
+    """
+    stripe_dir = directory
+    files_in_dir = [entry for entry in os.listdir(stripe_dir)  if os.path.isfile(os.path.join(stripe_dir, entry))]
+    files_in_dir = [os.path.join(stripe_dir, entry) for entry in files_in_dir]
+    json_files = [entry for entry in files_in_dir if re.match(r'part-.*\.json', os.path.basename(entry))]
+    return json_files
+# End of get_json_files()
 
-print("Printing total summaries 4")
-print(total_summaries4)
-	
-print(final_summary)
+if __name__ == "__main__":
+    args = parse_arguments()
+    json_files = get_json_files(args.dataset)
+    total_summaries = []
 
-for y in range(0,len(total_summaries2)):
-	#final_summary.append(total_summaries2[y][0])
-	final_summary = final_summary+" "+total_summaries4[y][0]
-	
+    # Summarizing from URL 
+    print("Summarizing from URLs")
+    for current_file in [json_files[0]]:
+        with open(current_file, 'r') as json_file:
+            for line in json_file:
+                record = json.loads(line)
+                url = record['URL_s']
+                print("Summarizing...", url)
+                summary_sentences = SummarizeUrl(url)
+                if summary_sentences:
+                    total_summaries.append(" ".join(summary_sentences))
+        print("Done processing one file")
 
+    print("Finished first pass through all records")
+    print("Recombining and summarizing...")
+    while len(total_summaries) > 15:
+        summaries_to_join = int(len(total_summaries) / 15)
+        if summaries_to_join == 1:
+            break
+        if summaries_to_join > 20:
+            summaries_to_join = 20
+        combined_summaries = [" ".join(total_summaries[i:i+summaries_to_join]) 
+                              for i in range(0, len(total_summaries), summaries_to_join)]
+        total_summaries = [" ".join(Summarize("Hurricane Florence", summary).split("\n")) 
+                           for summary in combined_summaries]
+        print("Finished pass through recombined summaries... Number of summaries left = %d" % len(total_summaries))
+
+    print("Final summary:")
+    for summary in total_summaries:
+        print(summary)
+        print("\n")
